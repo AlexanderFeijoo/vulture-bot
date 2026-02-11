@@ -105,7 +105,7 @@ export class DiscordAdapter implements MessagingAdapter {
       this.messageHandler({
         platform: 'discord',
         author: message.author.displayName,
-        content: message.content,
+        content: message.cleanContent,
         channel: 'chat',
       });
     });
