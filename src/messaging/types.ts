@@ -1,4 +1,4 @@
-export type ChannelPurpose = 'events' | 'chat';
+export type ChannelPurpose = 'events' | 'chat' | 'logs';
 
 export interface EmbedField {
   name: string;

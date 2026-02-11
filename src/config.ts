@@ -37,6 +37,7 @@ export const config = {
         guildId: env('DISCORD_GUILD_ID'),
         eventsChannelId: env('DISCORD_EVENTS_CHANNEL_ID'),
         chatChannelId: envOptional('DISCORD_CHAT_CHANNEL_ID'),
+        logsChannelId: envOptional('DISCORD_LOGS_CHANNEL_ID'),
       }
     : null,
 

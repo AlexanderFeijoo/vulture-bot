@@ -17,6 +17,7 @@ export interface DiscordConfig {
   guildId: string;
   eventsChannelId: string;
   chatChannelId?: string;
+  logsChannelId?: string;
 }
 
 export class DiscordAdapter implements MessagingAdapter {
@@ -25,6 +26,7 @@ export class DiscordAdapter implements MessagingAdapter {
   private config: DiscordConfig;
   private eventsChannel: TextChannel | null = null;
   private chatChannel: TextChannel | null = null;
+  private logsChannel: TextChannel | null = null;
   private slashCommandHandler: ((interaction: SlashCommandInteraction) => void) | null = null;
 
   constructor(config: DiscordConfig) {
@@ -72,6 +74,9 @@ export class DiscordAdapter implements MessagingAdapter {
     if (this.config.chatChannelId) {
       this.chatChannel = await this.client.channels.fetch(this.config.chatChannelId) as TextChannel;
     }
+    if (this.config.logsChannelId) {
+      this.logsChannel = await this.client.channels.fetch(this.config.logsChannelId) as TextChannel;
+    }
 
     logger.info('Discord adapter connected');
   }
@@ -96,7 +101,8 @@ export class DiscordAdapter implements MessagingAdapter {
   }
 
   async send(message: OutboundMessage): Promise<void> {
-    const channel = message.channel === 'events' ? this.eventsChannel : this.chatChannel;
+    const channelMap = { events: this.eventsChannel, chat: this.chatChannel, logs: this.logsChannel };
+    const channel = channelMap[message.channel];
     if (!channel) {
       logger.warn(`No Discord channel configured for purpose: ${message.channel}`);
       return;

@@ -13,7 +13,7 @@ export function setupJoinLeave(tracker: PlayerTracker, messaging: MessagingManag
   tracker.on('event', (event: MinecraftEvent) => {
     if (event.type === 'player_join') {
       messaging.broadcast({
-        channel: 'events',
+        channel: 'logs',
         description: `**${event.player}** joined the game`,
         color: COLOR_GREEN,
         thumbnailUrl: playerHeadUrl(event.player),
@@ -25,7 +25,7 @@ export function setupJoinLeave(tracker: PlayerTracker, messaging: MessagingManag
 
     if (event.type === 'player_leave') {
       messaging.broadcast({
-        channel: 'events',
+        channel: 'logs',
         description: `**${event.player}** left the game`,
         color: COLOR_RED,
         thumbnailUrl: playerHeadUrl(event.player),
