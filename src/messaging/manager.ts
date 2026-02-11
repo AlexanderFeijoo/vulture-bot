@@ -1,4 +1,4 @@
-import type { MessagingAdapter, OutboundMessage, SlashCommandInteraction, WebhookStyleMessage, InboundMessage } from './types.js';
+import type { MessagingAdapter, OutboundMessage, SlashCommandInteraction, WebhookStyleMessage, InboundMessage, ChannelPurpose } from './types.js';
 import { logger } from '../utils/logger.js';
 
 export class MessagingManager {
@@ -70,6 +70,45 @@ export class MessagingManager {
     for (const adapter of this.adapters) {
       adapter.setStatus(text);
     }
+  }
+
+  async sendToChannel(channel: ChannelPurpose, message: OutboundMessage): Promise<string | null> {
+    for (const adapter of this.adapters) {
+      if (adapter.sendToChannel) {
+        try {
+          return await adapter.sendToChannel(channel, message);
+        } catch (err) {
+          logger.error(`Failed to sendToChannel on ${adapter.platform}:`, err);
+        }
+      }
+    }
+    return null;
+  }
+
+  async editMessage(channel: ChannelPurpose, messageId: string, message: OutboundMessage): Promise<void> {
+    for (const adapter of this.adapters) {
+      if (adapter.editMessage) {
+        try {
+          await adapter.editMessage(channel, messageId, message);
+          return;
+        } catch (err) {
+          logger.error(`Failed to editMessage on ${adapter.platform}:`, err);
+        }
+      }
+    }
+  }
+
+  async findBotMessage(channel: ChannelPurpose, matchTitle: string): Promise<string | null> {
+    for (const adapter of this.adapters) {
+      if (adapter.findBotMessage) {
+        try {
+          return await adapter.findBotMessage(channel, matchTitle);
+        } catch (err) {
+          logger.error(`Failed to findBotMessage on ${adapter.platform}:`, err);
+        }
+      }
+    }
+    return null;
   }
 
   onSlashCommand(handler: (interaction: SlashCommandInteraction) => void): void {

@@ -10,6 +10,9 @@ import { DiscordAdapter } from './messaging/adapter-discord.js';
 import { setupJoinLeave } from './features/join-leave.js';
 import { setupOnlineStatus } from './features/online-status.js';
 import { setupChatBridge } from './features/chat-bridge.js';
+import { setupMap } from './features/map.js';
+import { setupScoreboard } from './features/scoreboard.js';
+import { setupServerStatusEmbed } from './features/server-status-embed.js';
 
 async function main(): Promise<void> {
   logger.info('Starting Vulture Bot...');
@@ -45,9 +48,14 @@ async function main(): Promise<void> {
   setupJoinLeave(tracker, messaging);
   setupOnlineStatus(tracker, messaging);
   setupChatBridge(tracker, messaging, rcon);
+  setupMap(messaging);
+  setupScoreboard(tracker, messaging, rcon);
 
   // --- Start tracking ---
   await tracker.start();
+
+  // --- Post-start features (need tracker running) ---
+  await setupServerStatusEmbed(tracker, messaging);
 
   // --- Graceful shutdown ---
   onShutdown(async () => {

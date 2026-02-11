@@ -11,7 +11,7 @@ import {
   type ChatInputCommandInteraction,
   type Webhook,
 } from 'discord.js';
-import type { MessagingAdapter, OutboundMessage, SlashCommandInteraction, WebhookStyleMessage, InboundMessage } from './types.js';
+import type { MessagingAdapter, OutboundMessage, SlashCommandInteraction, WebhookStyleMessage, InboundMessage, ChannelPurpose } from './types.js';
 import { logger } from '../utils/logger.js';
 
 export interface DiscordConfig {
@@ -134,6 +134,12 @@ export class DiscordAdapter implements MessagingAdapter {
       new SlashCommandBuilder()
         .setName('livechat')
         .setDescription('Toggle the MC ↔ Discord live chat bridge'),
+      new SlashCommandBuilder()
+        .setName('map')
+        .setDescription('Get the Dynmap link'),
+      new SlashCommandBuilder()
+        .setName('leaderboard')
+        .setDescription('Cycle the in-game sidebar leaderboard'),
     ];
 
     const rest = new REST({ version: '10' }).setToken(this.config.token);
@@ -202,6 +208,39 @@ export class DiscordAdapter implements MessagingAdapter {
       }
     }
     return result;
+  }
+
+  private resolveChannel(channel: ChannelPurpose): TextChannel | null {
+    const map = { events: this.eventsChannel, chat: this.chatChannel, logs: this.logsChannel };
+    return map[channel];
+  }
+
+  async sendToChannel(channel: ChannelPurpose, message: OutboundMessage): Promise<string | null> {
+    const ch = this.resolveChannel(channel);
+    if (!ch) return null;
+    const embed = this.buildEmbed(message);
+    const sent = await ch.send({ embeds: [embed] });
+    return sent.id;
+  }
+
+  async editMessage(channel: ChannelPurpose, messageId: string, message: OutboundMessage): Promise<void> {
+    const ch = this.resolveChannel(channel);
+    if (!ch) return;
+    const msg = await ch.messages.fetch(messageId);
+    const embed = this.buildEmbed(message);
+    await msg.edit({ embeds: [embed] });
+  }
+
+  async findBotMessage(channel: ChannelPurpose, matchTitle: string): Promise<string | null> {
+    const ch = this.resolveChannel(channel);
+    if (!ch) return null;
+    const messages = await ch.messages.fetch({ limit: 50 });
+    const botId = this.client.user?.id;
+    const found = messages.find((m) =>
+      m.author.id === botId &&
+      m.embeds.some((e) => e.title === matchTitle)
+    );
+    return found?.id ?? null;
   }
 
   onMessage(handler: (message: InboundMessage) => void): void {

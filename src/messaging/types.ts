@@ -45,6 +45,9 @@ export interface MessagingAdapter {
   connect(): Promise<void>;
   send(message: OutboundMessage): Promise<void>;
   sendAsUser?(message: WebhookStyleMessage): Promise<void>;
+  sendToChannel?(channel: ChannelPurpose, message: OutboundMessage): Promise<string | null>;
+  editMessage?(channel: ChannelPurpose, messageId: string, message: OutboundMessage): Promise<void>;
+  findBotMessage?(channel: ChannelPurpose, matchTitle: string): Promise<string | null>;
   setStatus(text: string): void;
   onSlashCommand(handler: (interaction: SlashCommandInteraction) => void): void;
   onMessage(handler: (message: InboundMessage) => void): void;
