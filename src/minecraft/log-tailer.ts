@@ -41,14 +41,6 @@ export class LogTailer extends EventEmitter {
       this.readNewLines();
     });
 
-    // When MC server restarts, latest.log gets truncated before we can read
-    // the shutdown line. Detect this and emit a synthetic "Stopping the server" line.
-    this.watcher.on('unlink', () => {
-      logger.info('Log file removed/truncated — server likely restarting');
-      this.fileOffset = 0;
-      this.emit('line', '[00Jan0000 00:00:00.000] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: Stopping the server');
-    });
-
     this.watcher.on('error', (error) => {
       logger.error('Log tailer watcher error:', error);
     });

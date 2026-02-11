@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { Rcon } from 'rcon-client';
 import { logger } from '../utils/logger.js';
 
@@ -7,12 +8,14 @@ export interface RconConfig {
   password: string;
 }
 
-export class MinecraftRcon {
+export class MinecraftRcon extends EventEmitter {
   private rcon: Rcon | null = null;
   private config: RconConfig;
   private connecting = false;
+  private wasConnected = false;
 
   constructor(config: RconConfig) {
+    super();
     this.config = config;
   }
 
@@ -27,9 +30,15 @@ export class MinecraftRcon {
         password: this.config.password,
       });
 
+      this.wasConnected = true;
+
       this.rcon.on('end', () => {
         logger.warn('RCON connection closed');
         this.rcon = null;
+        if (this.wasConnected) {
+          this.wasConnected = false;
+          this.emit('disconnected');
+        }
       });
 
       logger.info(`RCON connected to ${this.config.host}:${this.config.port}`);

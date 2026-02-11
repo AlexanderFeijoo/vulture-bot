@@ -26,6 +26,12 @@ export class PlayerTracker extends EventEmitter {
       if (event) this.handleEvent(event);
     });
 
+    // RCON disconnect = server shutting down
+    this.rcon.on('disconnected', () => {
+      this.onlinePlayers.clear();
+      this.handleEvent({ type: 'server_status', status: 'stopped', timestamp: new Date() });
+    });
+
     this.tailer.start();
 
     // Initial RCON sync
