@@ -1,0 +1,31 @@
+{
+  "name": "vulture-bot",
+  "version": "1.0.0",
+  "description": "Minecraft-to-Discord/Slack bridge bot for Uncle Al's Fat Stash",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "minecraft",
+    "discord",
+    "bot"
+  ],
+  "author": "AlexanderFeijoo",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "discord.js": "^14.25.1",
+    "dotenv": "^16.6.1",
+    "rcon-client": "^4.2.5",
+    "winston": "^3.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.11",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
