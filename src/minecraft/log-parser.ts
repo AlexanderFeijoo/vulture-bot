@@ -4,6 +4,7 @@ import type { MinecraftEvent } from './events.js';
 // [11Feb2026 05:35:14.246] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: Pulpstar44 joined the game
 const LOG_PREFIX = /^\[\d+\w+\d+ (\d{2}:\d{2}:\d{2})\.\d+\] \[Server thread\/INFO\]/;
 const MC_SERVER = /\[net\.minecraft\.server\.MinecraftServer\/\]:/;
+const DEDICATED_SERVER = /\[minecraft\/DedicatedServer\]:/;
 
 // Player join/leave
 const JOIN_PATTERN = /^(\w+) joined the game$/;
@@ -35,6 +36,21 @@ export function parseLogLine(line: string): MinecraftEvent | null {
 
   const timestamp = parseTimestamp(prefixMatch[1]);
 
+  // Server start/stop come from DedicatedServer, not MinecraftServer
+  if (DEDICATED_SERVER.test(line)) {
+    const dsIndex = line.indexOf('DedicatedServer]:');
+    if (dsIndex === -1) return null;
+    const dsMessage = line.slice(dsIndex + 'DedicatedServer]:'.length).trim();
+
+    if (SERVER_STARTED_PATTERN.test(dsMessage)) {
+      return { type: 'server_status', status: 'started', timestamp };
+    }
+    if (SERVER_STOPPING_PATTERN.test(dsMessage)) {
+      return { type: 'server_status', status: 'stopped', timestamp };
+    }
+    return null;
+  }
+
   if (!MC_SERVER.test(line)) return null;
 
   // Extract the message after the MinecraftServer prefix
@@ -64,16 +80,6 @@ export function parseLogLine(line: string): MinecraftEvent | null {
   const advMatch = message.match(ADVANCEMENT_PATTERN);
   if (advMatch) {
     return { type: 'advancement', player: advMatch[1], advancement: advMatch[2], timestamp };
-  }
-
-  // Server started
-  if (SERVER_STARTED_PATTERN.test(message)) {
-    return { type: 'server_status', status: 'started', timestamp };
-  }
-
-  // Server stopping
-  if (SERVER_STOPPING_PATTERN.test(message)) {
-    return { type: 'server_status', status: 'stopped', timestamp };
   }
 
   // Death — remaining MinecraftServer messages starting with a valid player name
