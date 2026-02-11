@@ -6,10 +6,12 @@ import {
   Routes,
   SlashCommandBuilder,
   ActivityType,
+  MessageFlags,
   type TextChannel,
   type ChatInputCommandInteraction,
+  type Webhook,
 } from 'discord.js';
-import type { MessagingAdapter, OutboundMessage, SlashCommandInteraction } from './types.js';
+import type { MessagingAdapter, OutboundMessage, SlashCommandInteraction, WebhookStyleMessage, InboundMessage } from './types.js';
 import { logger } from '../utils/logger.js';
 
 export interface DiscordConfig {
@@ -28,6 +30,8 @@ export class DiscordAdapter implements MessagingAdapter {
   private chatChannel: TextChannel | null = null;
   private logsChannel: TextChannel | null = null;
   private slashCommandHandler: ((interaction: SlashCommandInteraction) => void) | null = null;
+  private messageHandler: ((message: InboundMessage) => void) | null = null;
+  private chatWebhook: Webhook | null = null;
 
   constructor(config: DiscordConfig) {
     this.config = config;
@@ -49,9 +53,16 @@ export class DiscordAdapter implements MessagingAdapter {
       const cmdInteraction = interaction as ChatInputCommandInteraction;
       this.slashCommandHandler({
         commandName: cmdInteraction.commandName,
+        channelId: cmdInteraction.channelId,
+        memberRoleIds: cmdInteraction.member?.roles
+          ? [...(cmdInteraction.member.roles as any).cache.keys()]
+          : [],
         reply: async (message: OutboundMessage) => {
           const embed = this.buildEmbed(message);
           await cmdInteraction.reply({ embeds: [embed] });
+        },
+        ephemeralReply: async (text: string) => {
+          await cmdInteraction.reply({ content: text, flags: MessageFlags.Ephemeral });
         },
       });
     });
@@ -78,7 +89,33 @@ export class DiscordAdapter implements MessagingAdapter {
       this.logsChannel = await this.client.channels.fetch(this.config.logsChannelId) as TextChannel;
     }
 
+    // Set up webhook on chat channel for sendAsUser
+    if (this.chatChannel) {
+      this.chatWebhook = await this.getOrCreateWebhook(this.chatChannel);
+    }
+
+    // Listen for messages in chat channel (Discord → MC)
+    this.client.on('messageCreate', (message) => {
+      if (message.author.bot) return;
+      if (!this.config.chatChannelId || message.channelId !== this.config.chatChannelId) return;
+      if (!this.messageHandler) return;
+
+      this.messageHandler({
+        platform: 'discord',
+        author: message.author.displayName,
+        content: message.content,
+        channel: 'chat',
+      });
+    });
+
     logger.info('Discord adapter connected');
+  }
+
+  private async getOrCreateWebhook(channel: TextChannel): Promise<Webhook> {
+    const webhooks = await channel.fetchWebhooks();
+    const existing = webhooks.find((wh) => wh.name === 'Vulture MC Chat');
+    if (existing) return existing;
+    return channel.createWebhook({ name: 'Vulture MC Chat' });
   }
 
   private async registerSlashCommands(): Promise<void> {
@@ -89,6 +126,9 @@ export class DiscordAdapter implements MessagingAdapter {
       new SlashCommandBuilder()
         .setName('online')
         .setDescription('Show who is currently online on the Minecraft server'),
+      new SlashCommandBuilder()
+        .setName('livechat')
+        .setDescription('Toggle the MC ↔ Discord live chat bridge'),
     ];
 
     const rest = new REST({ version: '10' }).setToken(this.config.token);
@@ -118,6 +158,22 @@ export class DiscordAdapter implements MessagingAdapter {
 
   onSlashCommand(handler: (interaction: SlashCommandInteraction) => void): void {
     this.slashCommandHandler = handler;
+  }
+
+  async sendAsUser(message: WebhookStyleMessage): Promise<void> {
+    if (!this.chatWebhook) {
+      logger.warn('No chat webhook available — cannot send as user');
+      return;
+    }
+    await this.chatWebhook.send({
+      content: message.content,
+      username: message.username,
+      avatarURL: message.avatarUrl,
+    });
+  }
+
+  onMessage(handler: (message: InboundMessage) => void): void {
+    this.messageHandler = handler;
   }
 
   async disconnect(): Promise<void> {

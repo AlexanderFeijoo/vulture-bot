@@ -9,6 +9,7 @@ import { MessagingManager } from './messaging/manager.js';
 import { DiscordAdapter } from './messaging/adapter-discord.js';
 import { setupJoinLeave } from './features/join-leave.js';
 import { setupOnlineStatus } from './features/online-status.js';
+import { setupChatBridge } from './features/chat-bridge.js';
 
 async function main(): Promise<void> {
   logger.info('Starting Vulture Bot...');
@@ -43,6 +44,7 @@ async function main(): Promise<void> {
   // --- Features ---
   setupJoinLeave(tracker, messaging);
   setupOnlineStatus(tracker, messaging);
+  setupChatBridge(tracker, messaging, rcon);
 
   // --- Start tracking ---
   await tracker.start();

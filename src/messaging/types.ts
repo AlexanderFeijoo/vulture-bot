@@ -24,16 +24,28 @@ export interface InboundMessage {
   channel: ChannelPurpose;
 }
 
+export interface WebhookStyleMessage {
+  channel: ChannelPurpose;
+  username: string;
+  avatarUrl: string;
+  content: string;
+}
+
 export interface SlashCommandInteraction {
   commandName: string;
+  channelId: string;
+  memberRoleIds: string[];
   reply: (message: OutboundMessage) => Promise<void>;
+  ephemeralReply: (text: string) => Promise<void>;
 }
 
 export interface MessagingAdapter {
   readonly platform: string;
   connect(): Promise<void>;
   send(message: OutboundMessage): Promise<void>;
+  sendAsUser?(message: WebhookStyleMessage): Promise<void>;
   setStatus(text: string): void;
   onSlashCommand(handler: (interaction: SlashCommandInteraction) => void): void;
+  onMessage(handler: (message: InboundMessage) => void): void;
   disconnect(): Promise<void>;
 }
