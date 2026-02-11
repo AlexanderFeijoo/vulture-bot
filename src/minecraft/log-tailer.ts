@@ -41,6 +41,12 @@ export class LogTailer extends EventEmitter {
       this.readNewLines();
     });
 
+    // New file created (after rotation) — read from start
+    this.watcher.on('add', () => {
+      this.fileOffset = 0;
+      this.readNewLines();
+    });
+
     this.watcher.on('error', (error) => {
       logger.error('Log tailer watcher error:', error);
     });
@@ -83,7 +89,11 @@ export class LogTailer extends EventEmitter {
     });
 
     rl.on('close', () => {
-      this.fileOffset = currentSize;
+      try {
+        this.fileOffset = statSync(this.filePath).size;
+      } catch {
+        this.fileOffset = currentSize;
+      }
       this.processing = false;
     });
 
