@@ -4,6 +4,7 @@ import type { MinecraftEvent } from '../minecraft/events.js';
 
 const COLOR_GREEN = 0x00c853;
 const COLOR_RED = 0xff1744;
+const COLOR_BLACK = 0x23272a;
 
 function playerHeadUrl(player: string): string {
   return `https://mc-heads.net/avatar/${player}/64`;
@@ -33,6 +34,15 @@ export function setupJoinLeave(tracker: PlayerTracker, messaging: MessagingManag
       });
 
       messaging.setStatus(`${tracker.getPlayerCount()} player${tracker.getPlayerCount() !== 1 ? 's' : ''} online`);
+    }
+
+    if (event.type === 'death') {
+      messaging.broadcast({
+        channel: 'logs',
+        description: `**${event.player}** ${event.message}`,
+        color: COLOR_BLACK,
+        thumbnailUrl: playerHeadUrl(event.player),
+      });
     }
   });
 }

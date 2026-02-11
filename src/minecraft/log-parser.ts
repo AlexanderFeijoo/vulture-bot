@@ -73,5 +73,12 @@ export function parseLogLine(line: string): MinecraftEvent | null {
     return { type: 'server_status', status: 'stopped', timestamp };
   }
 
+  // Death — any remaining MinecraftServer message starting with a player name
+  // e.g. "DiamondMiner423 fell from a high place", "DiamondMiner423 burned to death"
+  const deathMatch = message.match(/^(\w+) (.+)$/);
+  if (deathMatch) {
+    return { type: 'death', player: deathMatch[1], message: deathMatch[2], timestamp };
+  }
+
   return null;
 }
