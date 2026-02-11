@@ -132,6 +132,7 @@ export class DiscordAdapter implements MessagingAdapter {
     if (message.title) embed.setTitle(message.title);
     if (message.color !== undefined) embed.setColor(message.color);
     if (message.thumbnailUrl) embed.setThumbnail(message.thumbnailUrl);
+    if (message.imageUrl) embed.setImage(message.imageUrl);
     if (message.footer) embed.setFooter({ text: message.footer });
     if (message.fields) {
       for (const field of message.fields) {

@@ -49,6 +49,10 @@ export const config = {
       }
     : null,
 
+  giphy: envOptional('GIPHY_API_KEY')
+    ? { apiKey: env('GIPHY_API_KEY') }
+    : null,
+
   bot: {
     logLevel: env('LOG_LEVEL', 'info'),
     rconReconcileIntervalMs: envInt('RCON_RECONCILE_INTERVAL_MS', 60000),

@@ -12,6 +12,7 @@ export interface OutboundMessage {
   description: string;
   color?: number;
   thumbnailUrl?: string;
+  imageUrl?: string;
   fields?: EmbedField[];
   footer?: string;
 }
