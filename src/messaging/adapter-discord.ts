@@ -125,7 +125,10 @@ export class DiscordAdapter implements MessagingAdapter {
     const commands = [
       new SlashCommandBuilder()
         .setName('online')
-        .setDescription('Show who is currently online on the Minecraft server'),
+        .setDescription('Check who is online (only you can see the response)'),
+      new SlashCommandBuilder()
+        .setName('online-all')
+        .setDescription('Show who is online (visible to everyone)'),
       new SlashCommandBuilder()
         .setName('livechat')
         .setDescription('Toggle the MC ↔ Discord live chat bridge'),
