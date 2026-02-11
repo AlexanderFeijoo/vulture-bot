@@ -9,6 +9,7 @@ export class LogTailer extends EventEmitter {
   private filePath: string;
   private fileOffset: number = 0;
   private processing = false;
+  private initialAdd = true;
 
   constructor(filePath: string) {
     super();
@@ -42,7 +43,12 @@ export class LogTailer extends EventEmitter {
     });
 
     // New file created (after rotation) — read from start
+    // Skip the first add event (chokidar fires it for the existing file on startup)
     this.watcher.on('add', () => {
+      if (this.initialAdd) {
+        this.initialAdd = false;
+        return;
+      }
       this.fileOffset = 0;
       this.readNewLines();
     });
