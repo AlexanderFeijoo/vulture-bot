@@ -4,7 +4,7 @@ import type { MinecraftEvent } from './events.js';
 // [11Feb2026 05:35:14.246] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: Pulpstar44 joined the game
 const LOG_PREFIX = /^\[\d+\w+\d+ (\d{2}:\d{2}:\d{2})\.\d+\] \[Server thread\/INFO\]/;
 const MC_SERVER = /\[net\.minecraft\.server\.MinecraftServer\/\]:/;
-const DEDICATED_SERVER = /\[minecraft\/DedicatedServer\]:/;
+const DEDICATED_SERVER = /\[net\.minecraft\.server\.dedicated\.DedicatedServer\/\]:/;
 
 // Player join/leave
 const JOIN_PATTERN = /^(\w+) joined the game$/;
@@ -38,9 +38,9 @@ export function parseLogLine(line: string): MinecraftEvent | null {
 
   // Server start/stop come from DedicatedServer, not MinecraftServer
   if (DEDICATED_SERVER.test(line)) {
-    const dsIndex = line.indexOf('DedicatedServer]:');
+    const dsIndex = line.indexOf('DedicatedServer/]:');
     if (dsIndex === -1) return null;
-    const dsMessage = line.slice(dsIndex + 'DedicatedServer]:'.length).trim();
+    const dsMessage = line.slice(dsIndex + 'DedicatedServer/]:'.length).trim();
 
     if (SERVER_STARTED_PATTERN.test(dsMessage)) {
       return { type: 'server_status', status: 'started', timestamp };
