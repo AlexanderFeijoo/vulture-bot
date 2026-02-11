@@ -37,6 +37,7 @@ export class MinecraftRcon extends EventEmitter {
         this.rcon = null;
         if (this.wasConnected) {
           this.wasConnected = false;
+          logger.info('Emitting RCON disconnected event (server likely shutting down)');
           this.emit('disconnected');
         }
       });
