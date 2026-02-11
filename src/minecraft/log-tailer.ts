@@ -1,15 +1,14 @@
 import { EventEmitter } from 'node:events';
 import { createReadStream, statSync } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { watch } from 'chokidar';
 import { logger } from '../utils/logger.js';
 
 export class LogTailer extends EventEmitter {
-  private watcher: ReturnType<typeof watch> | null = null;
   private filePath: string;
   private fileOffset: number = 0;
   private processing = false;
-  private initialAdd = true;
+  private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private lastInode: number = 0;
 
   constructor(filePath: string) {
     super();
@@ -21,41 +20,18 @@ export class LogTailer extends EventEmitter {
     try {
       const stats = statSync(this.filePath);
       this.fileOffset = stats.size;
+      this.lastInode = stats.ino;
     } catch {
-      // File doesn't exist yet — start from 0
       this.fileOffset = 0;
+      this.lastInode = 0;
     }
 
     logger.info(`Tailing log file: ${this.filePath}`);
 
-    this.watcher = watch(this.filePath, {
-      persistent: true,
-      usePolling: true,
-      interval: 500,
-      awaitWriteFinish: {
-        stabilityThreshold: 200,
-        pollInterval: 100,
-      },
-    });
-
-    this.watcher.on('change', () => {
+    // Simple poll every 500ms — survives file rotation reliably
+    this.pollTimer = setInterval(() => {
       this.readNewLines();
-    });
-
-    // New file created (after rotation) — read from start
-    // Skip the first add event (chokidar fires it for the existing file on startup)
-    this.watcher.on('add', () => {
-      if (this.initialAdd) {
-        this.initialAdd = false;
-        return;
-      }
-      this.fileOffset = 0;
-      this.readNewLines();
-    });
-
-    this.watcher.on('error', (error) => {
-      logger.error('Log tailer watcher error:', error);
-    });
+    }, 500);
   }
 
   private readNewLines(): void {
@@ -63,16 +39,26 @@ export class LogTailer extends EventEmitter {
     this.processing = true;
 
     let currentSize: number;
+    let currentInode: number;
     try {
-      currentSize = statSync(this.filePath).size;
+      const stats = statSync(this.filePath);
+      currentSize = stats.size;
+      currentInode = stats.ino;
     } catch {
       this.processing = false;
       return;
     }
 
-    // Log file was rotated/truncated
+    // File was recreated (new inode) — reset to read from start
+    if (currentInode !== this.lastInode) {
+      logger.info('Log file rotated (new file), reading from start');
+      this.fileOffset = 0;
+      this.lastInode = currentInode;
+    }
+
+    // File was truncated in place
     if (currentSize < this.fileOffset) {
-      logger.info('Log file rotated, reading from start');
+      logger.info('Log file truncated, reading from start');
       this.fileOffset = 0;
     }
 
@@ -110,9 +96,9 @@ export class LogTailer extends EventEmitter {
   }
 
   stop(): void {
-    if (this.watcher) {
-      this.watcher.close();
-      this.watcher = null;
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
     }
     logger.info('Log tailer stopped');
   }
