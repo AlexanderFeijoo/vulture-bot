@@ -1,9 +1,9 @@
 import type { MinecraftEvent } from './events.js';
 
-// Forge 1.20.1 log line prefix:
-// [HH:MM:SS] [Server thread/INFO] [net.minecraft.server.dedicated.DedicatedServer]:
-const LOG_PREFIX = /^\[(\d{2}:\d{2}:\d{2})\] \[Server thread\/INFO\]/;
-const DEDICATED_SERVER = /\[net\.minecraft\.server\.dedicated\.DedicatedServer\]:/;
+// Forge 1.20.1 log format (actual):
+// [11Feb2026 05:35:14.246] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: Pulpstar44 joined the game
+const LOG_PREFIX = /^\[\d+\w+\d+ (\d{2}:\d{2}:\d{2})\.\d+\] \[Server thread\/INFO\]/;
+const MC_SERVER = /\[net\.minecraft\.server\.MinecraftServer\/\]:/;
 
 // Player join/leave
 const JOIN_PATTERN = /^(\w+) joined the game$/;
@@ -32,13 +32,12 @@ export function parseLogLine(line: string): MinecraftEvent | null {
 
   const timestamp = parseTimestamp(prefixMatch[1]);
 
-  // Only parse DedicatedServer messages for most events
-  if (!DEDICATED_SERVER.test(line)) return null;
+  if (!MC_SERVER.test(line)) return null;
 
-  // Extract the message after the DedicatedServer prefix
-  const msgIndex = line.indexOf('DedicatedServer]:');
+  // Extract the message after the MinecraftServer prefix
+  const msgIndex = line.indexOf('MinecraftServer/]:');
   if (msgIndex === -1) return null;
-  const message = line.slice(msgIndex + 'DedicatedServer]:'.length).trim();
+  const message = line.slice(msgIndex + 'MinecraftServer/]:'.length).trim();
 
   // Player join
   const joinMatch = message.match(JOIN_PATTERN);
