@@ -35,6 +35,7 @@ export interface SlashCommandInteraction {
   commandName: string;
   channelId: string;
   memberRoleIds: string[];
+  isGuildOwner: boolean;
   reply: (message: OutboundMessage) => Promise<void>;
   ephemeralReply: (text: string) => Promise<void>;
 }

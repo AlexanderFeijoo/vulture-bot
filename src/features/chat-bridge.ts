@@ -65,8 +65,9 @@ export function setupChatBridge(tracker: PlayerTracker, messaging: MessagingMana
       return;
     }
 
-    // Must have Moderator role
-    if (!interaction.memberRoleIds.includes(MODERATOR_ROLE_ID)) {
+    // Must be owner or have Moderator role
+    const hasPermission = interaction.isGuildOwner || interaction.memberRoleIds.includes(MODERATOR_ROLE_ID);
+    if (!hasPermission) {
       interaction.ephemeralReply('You need the Moderator role to use this command.');
       return;
     }

@@ -51,12 +51,14 @@ export class DiscordAdapter implements MessagingAdapter {
       if (!this.slashCommandHandler) return;
 
       const cmdInteraction = interaction as ChatInputCommandInteraction;
+      const guild = cmdInteraction.guild;
       this.slashCommandHandler({
         commandName: cmdInteraction.commandName,
         channelId: cmdInteraction.channelId,
         memberRoleIds: cmdInteraction.member?.roles
           ? [...(cmdInteraction.member.roles as any).cache.keys()]
           : [],
+        isGuildOwner: guild?.ownerId === cmdInteraction.user.id,
         reply: async (message: OutboundMessage) => {
           const embed = this.buildEmbed(message);
           await cmdInteraction.reply({ embeds: [embed] });
