@@ -19,6 +19,9 @@ const ADVANCEMENT_PATTERN = /^(\w+) has made the advancement \[(.+)\]$/;
 const SERVER_STARTED_PATTERN = /^Done \(\d+\.\d+s\)! For help, type "help"/;
 const SERVER_STOPPING_PATTERN = /^Stopping the server$/;
 
+// Server messages that look like deaths but aren't (first word matches \w+ pattern)
+const NON_DEATH_PREFIXES = /^(Saving|Loading|Preparing|ThreadedAnvilChunkStorage|Generating|Starting|Stopping|Found|Loaded|Time|UUID|Successfully|Changing|Can't|Could|Failed|Flushing|Reloading|Unloading) /;
+
 function parseTimestamp(timeStr: string): Date {
   const now = new Date();
   const [hours, minutes, seconds] = timeStr.split(':').map(Number);
@@ -73,10 +76,11 @@ export function parseLogLine(line: string): MinecraftEvent | null {
     return { type: 'server_status', status: 'stopped', timestamp };
   }
 
-  // Death — any remaining MinecraftServer message starting with a player name
+  // Death — remaining MinecraftServer messages starting with a valid player name
   // e.g. "DiamondMiner423 fell from a high place", "DiamondMiner423 burned to death"
-  const deathMatch = message.match(/^(\w+) (.+)$/);
-  if (deathMatch) {
+  // MC usernames: 3-16 chars, letters/digits/underscores, must start with a letter
+  const deathMatch = message.match(/^([A-Za-z]\w{2,15}) (.+)$/);
+  if (deathMatch && !NON_DEATH_PREFIXES.test(message)) {
     return { type: 'death', player: deathMatch[1], message: deathMatch[2], timestamp };
   }
 
