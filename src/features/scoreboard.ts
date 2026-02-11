@@ -28,6 +28,26 @@ async function createObjectives(rcon: MinecraftRcon): Promise<void> {
   logger.info('Scoreboard objectives created');
 }
 
+async function cycleLeaderboard(currentIndex: number, rcon: MinecraftRcon): Promise<{ newIndex: number; message: string }> {
+  let next = currentIndex + 1;
+
+  // Past last objective → turn off
+  if (next >= OBJECTIVES.length) {
+    next = -1;
+    await rcon.sendCommand('scoreboard objectives setdisplay sidebar');
+    return { newIndex: next, message: 'Sidebar leaderboard turned off' };
+  }
+
+  // Wrapped around from off → back to first
+  if (next < 0) {
+    next = 0;
+  }
+
+  const obj = OBJECTIVES[next];
+  await rcon.sendCommand(`scoreboard objectives setdisplay sidebar ${obj.name}`);
+  return { newIndex: next, message: `Sidebar now showing: ${obj.display}` };
+}
+
 export function setupScoreboard(tracker: PlayerTracker, messaging: MessagingManager, rcon: MinecraftRcon): void {
   // Index into OBJECTIVES, or -1 for "off"
   let currentIndex = 0;
@@ -45,38 +65,32 @@ export function setupScoreboard(tracker: PlayerTracker, messaging: MessagingMana
     logger.warn('Failed to create scoreboard objectives on bot start:', err);
   });
 
-  // /leaderboard command cycles through objectives
+  // Discord /leaderboard command
   messaging.onSlashCommand(async (interaction) => {
     if (interaction.commandName !== 'leaderboard') return;
 
-    // Advance to next
-    currentIndex++;
-
-    // Past last objective → turn off
-    if (currentIndex >= OBJECTIVES.length) {
-      currentIndex = -1;
-      try {
-        await rcon.sendCommand('scoreboard objectives setdisplay sidebar');
-        await interaction.ephemeralReply('Sidebar leaderboard turned off');
-      } catch (err) {
-        logger.error('Failed to clear sidebar:', err);
-        await interaction.ephemeralReply('Failed to update sidebar');
-      }
-      return;
-    }
-
-    // Wrapped around from off → back to first
-    if (currentIndex < 0) {
-      currentIndex = 0;
-    }
-
-    const obj = OBJECTIVES[currentIndex];
     try {
-      await rcon.sendCommand(`scoreboard objectives setdisplay sidebar ${obj.name}`);
-      await interaction.ephemeralReply(`Sidebar now showing: **${obj.display}**`);
+      const result = await cycleLeaderboard(currentIndex, rcon);
+      currentIndex = result.newIndex;
+      await interaction.ephemeralReply(result.message);
     } catch (err) {
-      logger.error('Failed to set sidebar display:', err);
+      logger.error('Failed to cycle leaderboard:', err);
       await interaction.ephemeralReply('Failed to update sidebar');
+    }
+  });
+
+  // In-game !leaderboard command
+  tracker.on('event', async (event: MinecraftEvent) => {
+    if (event.type !== 'chat') return;
+    if (event.message.trim().toLowerCase() !== '!leaderboard') return;
+
+    try {
+      const result = await cycleLeaderboard(currentIndex, rcon);
+      currentIndex = result.newIndex;
+      const tellraw = JSON.stringify({ text: result.message, color: 'yellow' });
+      await rcon.sendCommand(`tellraw @a ${tellraw}`);
+    } catch (err) {
+      logger.error('Failed to cycle leaderboard from in-game:', err);
     }
   });
 

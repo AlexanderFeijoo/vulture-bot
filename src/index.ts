@@ -48,7 +48,7 @@ async function main(): Promise<void> {
   setupJoinLeave(tracker, messaging);
   setupOnlineStatus(tracker, messaging);
   setupChatBridge(tracker, messaging, rcon);
-  setupMap(messaging);
+  setupMap(tracker, messaging, rcon);
   setupScoreboard(tracker, messaging, rcon);
 
   // --- Start tracking ---
