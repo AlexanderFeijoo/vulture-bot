@@ -7,6 +7,8 @@ import { config } from '../config.js';
 const COLOR_GREEN = 0x00c853;
 const COLOR_RED = 0xff1744;
 const COLOR_BLOOD_RED = 0x8b0000;
+const COLOR_ORANGE = 0xff9100;
+const COLOR_BLUE = 0x2196f3;
 
 function playerHeadUrl(player: string): string {
   return `https://mc-heads.net/avatar/${player}/64`;
@@ -52,6 +54,19 @@ export function setupJoinLeave(tracker: PlayerTracker, messaging: MessagingManag
         thumbnailUrl: playerHeadUrl(event.player),
         imageUrl: gifUrl,
       });
+    }
+
+    if (event.type === 'server_status') {
+      const isStarted = event.status === 'started';
+      messaging.broadcast({
+        channel: 'logs',
+        description: isStarted ? 'Server is **online**' : 'Server is **shutting down**',
+        color: isStarted ? COLOR_BLUE : COLOR_ORANGE,
+      });
+
+      if (!isStarted) {
+        messaging.setStatus('Server offline');
+      }
     }
   });
 }
