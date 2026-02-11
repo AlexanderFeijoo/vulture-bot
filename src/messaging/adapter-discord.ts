@@ -170,11 +170,38 @@ export class DiscordAdapter implements MessagingAdapter {
       logger.warn('No chat webhook available — cannot send as user');
       return;
     }
+    const content = await this.resolveMentions(message.content);
     await this.chatWebhook.send({
-      content: message.content,
+      content,
       username: message.username,
       avatarURL: message.avatarUrl,
     });
+  }
+
+  private async resolveMentions(content: string): Promise<string> {
+    const guild = this.client.guilds.cache.get(this.config.guildId);
+    if (!guild) return content;
+
+    const matches = [...content.matchAll(/@(\w+)/g)];
+    if (matches.length === 0) return content;
+
+    let result = content;
+    for (const match of matches) {
+      const name = match[1];
+      try {
+        const members = await guild.members.search({ query: name, limit: 1 });
+        const member = members.first();
+        if (member && (
+          member.displayName.toLowerCase() === name.toLowerCase() ||
+          member.user.username.toLowerCase() === name.toLowerCase()
+        )) {
+          result = result.replace(`@${name}`, `<@${member.id}>`);
+        }
+      } catch {
+        // If search fails, leave as plain text
+      }
+    }
+    return result;
   }
 
   onMessage(handler: (message: InboundMessage) => void): void {
