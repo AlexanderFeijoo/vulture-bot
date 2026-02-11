@@ -8,6 +8,24 @@ const CHAT_CHANNEL_ID = '1471054475753029693';
 const MODERATOR_ROLE_ID = '1471056672100323496';
 const COLOR_BLUE = 0x2196f3;
 
+// Minecraft tellraw colors that are readable in chat
+const MC_COLORS = [
+  'green', 'aqua', 'red', 'light_purple', 'yellow',
+  'gold', 'dark_green', 'dark_aqua', 'dark_red', 'dark_purple',
+];
+
+function hashUsername(name: string): number {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash + name.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function colorForUser(name: string): string {
+  return MC_COLORS[hashUsername(name) % MC_COLORS.length];
+}
+
 function playerHeadUrl(player: string): string {
   return `https://mc-heads.net/avatar/${player}/64`;
 }
@@ -42,9 +60,10 @@ export function setupChatBridge(tracker: PlayerTracker, messaging: MessagingMana
     // Strip Minecraft color codes
     content = content.replace(/§/g, '');
 
+    const userColor = colorForUser(message.author);
     const tellraw = JSON.stringify([
       { text: '[Discord] ', color: 'blue' },
-      { text: `<${message.author}> `, color: 'blue' },
+      { text: `<${message.author}> `, color: userColor },
       { text: content, color: 'white' },
     ]);
 
