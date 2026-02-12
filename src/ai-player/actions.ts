@@ -1,5 +1,6 @@
 import type { Bot } from 'mineflayer';
-import { goals as Goals } from 'mineflayer-pathfinder';
+import pathfinderPkg from 'mineflayer-pathfinder';
+const { goals: Goals } = pathfinderPkg;
 import { logger } from '../utils/logger.js';
 import type { PersistentMemory } from './memory.js';
 

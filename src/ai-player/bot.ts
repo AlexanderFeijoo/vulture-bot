@@ -1,8 +1,12 @@
 import { EventEmitter } from 'node:events';
 import mineflayer, { type Bot } from 'mineflayer';
-import { pathfinder, Movements, goals } from 'mineflayer-pathfinder';
-import { plugin as collectBlock } from 'mineflayer-collectblock';
-import { loader as autoEat } from 'mineflayer-auto-eat';
+import pathfinderPkg from 'mineflayer-pathfinder';
+const { pathfinder, Movements, goals } = pathfinderPkg;
+import collectBlockPkg from 'mineflayer-collectblock';
+const { plugin: collectBlock } = collectBlockPkg;
+// @ts-ignore — CJS module with no default export declaration
+import autoEatPkg from 'mineflayer-auto-eat';
+const autoEat = autoEatPkg.loader ?? autoEatPkg;
 import { logger } from '../utils/logger.js';
 import type { AIPlayerConfig } from './types.js';
 
