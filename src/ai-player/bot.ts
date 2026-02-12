@@ -9,7 +9,6 @@ const require = createRequire(import.meta.url);
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const { plugin: collectBlock } = require('mineflayer-collectblock');
 const { loader: autoEat } = require('mineflayer-auto-eat');
-const { autoVersionForge } = require('minecraft-protocol-forge');
 
 export class AIPlayerBot extends EventEmitter {
   private bot: Bot | null = null;
@@ -48,12 +47,14 @@ export class AIPlayerBot extends EventEmitter {
           port: this.config.port,
           username: this.config.username,
           auth: this.config.auth,
-          version: false as any, // Let forge handshake detect version
+          version: '1.20.1',
           hideErrors: false,
+          // FML3 marker tells Forge server we speak Forge protocol
+          fakeHost: `${this.config.host}\0FML3\0`,
         });
 
-        // Handle Forge handshake — auto-detect server mods and respond
-        autoVersionForge((this.bot as any)._client);
+        // Handle FML3 login negotiation — respond to server's mod queries
+        this.setupForgeHandshake();
 
         this.bot.loadPlugin(pathfinder);
         this.bot.loadPlugin(collectBlock);
@@ -127,6 +128,26 @@ export class AIPlayerBot extends EventEmitter {
       } catch (err) {
         reject(err);
       }
+    });
+  }
+
+  private setupForgeHandshake(): void {
+    if (!this.bot) return;
+    const client = (this.bot as any)._client;
+
+    // Intercept login plugin requests from the Forge server
+    // FML3 sends mod negotiation through login_plugin_request packets
+    client.on('login_plugin_request', (packet: any) => {
+      logger.debug(`Forge login plugin request: channel=${packet.channel}, id=${packet.messageId}`);
+
+      // Respond to all login plugin requests with "understood" (empty response)
+      // This tells the server we acknowledge its mod list without requiring any specific mods
+      client.write('login_plugin_response', {
+        messageId: packet.messageId,
+        data: undefined, // No data = "I don't understand this channel" which Forge treats as vanilla-compatible
+      });
+
+      logger.debug(`Forge login plugin response sent for messageId=${packet.messageId}`);
     });
   }
 
