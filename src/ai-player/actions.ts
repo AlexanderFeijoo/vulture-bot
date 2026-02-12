@@ -6,6 +6,7 @@ const require = createRequire(import.meta.url);
 const { goals: Goals } = require('mineflayer-pathfinder');
 import { logger } from '../utils/logger.js';
 import type { PersistentMemory } from './memory.js';
+import type { Boundary } from './types.js';
 
 // Tool definitions for Claude API (tool_use pattern)
 export const ACTION_TOOLS = [
@@ -255,10 +256,35 @@ export const ACTION_TOOLS = [
 export class ActionExecutor {
   private bot: Bot;
   private memory: PersistentMemory;
+  private boundary: Boundary | null;
 
-  constructor(bot: Bot, memory: PersistentMemory) {
+  constructor(bot: Bot, memory: PersistentMemory, boundary: Boundary | null) {
     this.bot = bot;
     this.memory = memory;
+    this.boundary = boundary;
+  }
+
+  /** Check if a position is within the allowed boundary. Returns clamped coords if outside. */
+  private clampToBoundary(x: number, z: number): { x: number; z: number; clamped: boolean } {
+    if (!this.boundary) return { x, z, clamped: false };
+    const dx = x - this.boundary.centerX;
+    const dz = z - this.boundary.centerZ;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist <= this.boundary.radius) return { x, z, clamped: false };
+    // Clamp to boundary edge
+    const scale = this.boundary.radius / dist;
+    return {
+      x: Math.round(this.boundary.centerX + dx * scale),
+      z: Math.round(this.boundary.centerZ + dz * scale),
+      clamped: true,
+    };
+  }
+
+  private isInBoundary(x: number, z: number): boolean {
+    if (!this.boundary) return true;
+    const dx = x - this.boundary.centerX;
+    const dz = z - this.boundary.centerZ;
+    return Math.sqrt(dx * dx + dz * dz) <= this.boundary.radius;
   }
 
   async execute(actionName: string, args: Record<string, any>): Promise<string> {
@@ -331,16 +357,21 @@ export class ActionExecutor {
   // --- Movement ---
 
   private async goToPosition(x: number, y: number, z: number): Promise<string> {
-    const goal = new Goals.GoalBlock(x, y, z);
+    const { x: cx, z: cz, clamped } = this.clampToBoundary(x, z);
+    if (clamped) logger.debug(`Boundary: clamped goToPosition from (${x},${z}) to (${cx},${cz})`);
+    const goal = new Goals.GoalBlock(cx, y, cz);
     this.bot.pathfinder.setGoal(goal);
     await this.waitForGoal(15000);
-    return `Moved toward (${x}, ${y}, ${z}).`;
+    return `Moved toward (${cx}, ${y}, ${cz}).`;
   }
 
   private async goToPlayer(playerName: string): Promise<string> {
     const player = this.bot.players[playerName];
     if (!player?.entity) return `Can't see player ${playerName}.`;
-    const goal = new Goals.GoalNear(player.entity.position.x, player.entity.position.y, player.entity.position.z, 3);
+    const px = player.entity.position.x;
+    const pz = player.entity.position.z;
+    if (!this.isInBoundary(px, pz)) return `${playerName} is outside my allowed area.`;
+    const goal = new Goals.GoalNear(px, player.entity.position.y, pz, 3);
     this.bot.pathfinder.setGoal(goal);
     await this.waitForGoal(15000);
     return `Moved toward ${playerName}.`;
@@ -354,8 +385,9 @@ export class ActionExecutor {
     const block = this.bot.findBlock({
       matching: blockId.id,
       maxDistance: 64,
+      useExtraInfo: (block: any) => this.isInBoundary(block.position.x, block.position.z),
     });
-    if (!block) return `No ${blockType} found nearby.`;
+    if (!block) return `No ${blockType} found nearby (within allowed area).`;
 
     const goal = new Goals.GoalBlock(block.position.x, block.position.y, block.position.z);
     this.bot.pathfinder.setGoal(goal);
@@ -367,8 +399,11 @@ export class ActionExecutor {
     const pos = this.bot.entity.position;
     const angle = Math.random() * Math.PI * 2;
     const dist = 20 + Math.random() * 30;
-    const x = Math.round(pos.x + Math.cos(angle) * dist);
-    const z = Math.round(pos.z + Math.sin(angle) * dist);
+    let x = Math.round(pos.x + Math.cos(angle) * dist);
+    let z = Math.round(pos.z + Math.sin(angle) * dist);
+    const clamped = this.clampToBoundary(x, z);
+    x = clamped.x;
+    z = clamped.z;
     const goal = new Goals.GoalXZ(x, z);
     this.bot.pathfinder.setGoal(goal);
     await this.waitForGoal(20000);

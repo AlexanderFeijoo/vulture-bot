@@ -52,7 +52,7 @@ export class AIBrain {
       return;
     }
 
-    this.executor = new ActionExecutor(this.botWrapper.mcBot, this.memory);
+    this.executor = new ActionExecutor(this.botWrapper.mcBot, this.memory, this.config.boundary);
     this.stopped = false;
 
     // Wire up triggers
@@ -224,7 +224,7 @@ export class AIBrain {
 
   private buildSystemPrompt(): string {
     const name = this.memory.memory.identity.name || this.config.username;
-    return [
+    const lines = [
       this.personality,
       '',
       `Your in-game name is "${name}".`,
@@ -234,7 +234,16 @@ export class AIBrain {
       'If nothing interesting is happening, pursue your current goal or explore.',
       'If someone talks to you, respond naturally. Be friendly but simple.',
       'If you are in danger (low health, hostile mob nearby), prioritize survival.',
-    ].join('\n');
+    ];
+
+    if (this.config.boundary) {
+      const b = this.config.boundary;
+      lines.push('');
+      lines.push(`IMPORTANT: You must stay within ${b.radius} blocks of your home area (center: ${b.centerX}, ${b.centerZ}).`);
+      lines.push('Do not try to go beyond this boundary. If a player asks you to follow them far away, politely decline.');
+    }
+
+    return lines.join('\n');
   }
 
   private trackCosts(inputTokens: number, outputTokens: number): void {

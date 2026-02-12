@@ -1,3 +1,9 @@
+export interface Boundary {
+  centerX: number;
+  centerZ: number;
+  radius: number;
+}
+
 export interface AIPlayerConfig {
   enabled: true;
   username: string;
@@ -9,6 +15,7 @@ export interface AIPlayerConfig {
   maxDailySpend: number;
   personalityFile: string;
   memoryFile: string;
+  boundary: Boundary | null;
 }
 
 export interface Position {

@@ -84,6 +84,13 @@ export const config = {
         maxDailySpend: envFloat('AI_PLAYER_MAX_DAILY_SPEND', 10.0),
         personalityFile: env('AI_PLAYER_PERSONALITY_FILE', 'data/ai-personality.txt'),
         memoryFile: env('AI_PLAYER_MEMORY_FILE', 'data/ai-memory.json'),
+        boundary: envOptional('AI_PLAYER_BOUNDARY_RADIUS')
+          ? {
+              centerX: envInt('AI_PLAYER_BOUNDARY_X', 0),
+              centerZ: envInt('AI_PLAYER_BOUNDARY_Z', 0),
+              radius: envInt('AI_PLAYER_BOUNDARY_RADIUS', 200),
+            }
+          : null,
       }
     : null,
 } as const;
