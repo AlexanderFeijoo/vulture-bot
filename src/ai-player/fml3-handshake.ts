@@ -102,6 +102,11 @@ function parseS2CModList(payload: Buffer, offset: number): ServerModList {
   return { mods, channels, registries };
 }
 
+// Channel prefixes we know how to handle during login handshake.
+// Other channels (e.g. framework:handshake from Architectury) have their own
+// login protocols we can't speak, so we don't claim support for them.
+const SUPPORTED_CHANNEL_PREFIXES = ['fml:', 'forge:', 'minecraft:'];
+
 function buildC2SModListReply(server: ServerModList): Buffer {
   const parts: Buffer[] = [];
 
@@ -114,9 +119,14 @@ function buildC2SModListReply(server: ServerModList): Buffer {
     parts.push(writeString(mod));
   }
 
-  // Echo channels
-  parts.push(writeVarInt(server.channels.length));
-  for (const ch of server.channels) {
+  // Only claim channels we can handle — skip mod-specific handshake channels
+  const supportedChannels = server.channels.filter((ch) =>
+    SUPPORTED_CHANNEL_PREFIXES.some((prefix) => ch.name.startsWith(prefix))
+  );
+  logger.info(`FML3: Claiming ${supportedChannels.length}/${server.channels.length} channels (filtered non-FML)`);
+
+  parts.push(writeVarInt(supportedChannels.length));
+  for (const ch of supportedChannels) {
     parts.push(writeString(ch.name));
     parts.push(writeString(ch.version));
   }
