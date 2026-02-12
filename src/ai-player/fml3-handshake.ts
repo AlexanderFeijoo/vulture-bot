@@ -147,78 +147,98 @@ function wrapLoginPacket(innerChannel: string, innerData: Buffer): Buffer {
   return Buffer.concat([writeString(innerChannel), innerData]);
 }
 
+// --- FML3 packet handler ---
+
+function handleLoginPluginRequest(client: any, packet: any): void {
+  const { messageId, channel, data } = packet;
+
+  logger.info(`FML3: Received login_plugin_request msgId=${messageId} channel="${channel}" dataLen=${data?.length ?? 'null'}`);
+
+  // Non-FML3 channels — respond with "not understood" (vanilla behavior)
+  if (channel !== 'fml:loginwrapper' || !data) {
+    logger.info(`FML3: Non-FML3 channel "${channel}", responding with "not understood"`);
+    client.write('login_plugin_response', {
+      messageId,
+      data: undefined,
+    });
+    return;
+  }
+
+  try {
+    const inner = unwrapLoginPacket(data);
+    const [packetId, offset] = readVarInt(inner.payload, 0);
+
+    logger.info(`FML3: Inner packet ID=${packetId} on channel="${inner.channel}" (${inner.payload.length} bytes)`);
+
+    if (packetId === S2C_MOD_LIST) {
+      const serverMods = parseS2CModList(inner.payload, offset);
+      logger.info(
+        `FML3: Server has ${serverMods.mods.length} mods, ` +
+        `${serverMods.channels.length} channels, ` +
+        `${serverMods.registries.length} registries`
+      );
+
+      const reply = buildC2SModListReply(serverMods);
+      const wrapped = wrapLoginPacket(inner.channel, reply);
+      logger.info(`FML3: Sending mod list reply (${wrapped.length} bytes)`);
+      client.write('login_plugin_response', {
+        messageId,
+        data: wrapped,
+      });
+
+    } else if (packetId === S2C_REGISTRY || packetId === S2C_CONFIG_DATA) {
+      const ack = buildAcknowledge();
+      const wrapped = wrapLoginPacket(inner.channel, ack);
+      logger.info(`FML3: Acknowledging packet ID=${packetId} (${wrapped.length} bytes)`);
+      client.write('login_plugin_response', {
+        messageId,
+        data: wrapped,
+      });
+
+    } else {
+      // Unknown FML3 packet — acknowledge it generically
+      const ack = buildAcknowledge();
+      const wrapped = wrapLoginPacket(inner.channel, ack);
+      logger.info(`FML3: Acknowledging unknown packet ID=${packetId}`);
+      client.write('login_plugin_response', {
+        messageId,
+        data: wrapped,
+      });
+    }
+
+  } catch (err) {
+    logger.error('FML3: Error handling packet:', err);
+    // Fall back to "not understood" so we don't hang
+    client.write('login_plugin_response', {
+      messageId,
+      data: undefined,
+    });
+  }
+}
+
 // --- Main setup function ---
 
 /**
  * Install FML3 handshake handler on a minecraft-protocol client.
- * Call immediately after mineflayer.createBot() — removes the default
- * auto-responder and replaces it with proper FML3 negotiation.
+ * Call immediately after mineflayer.createBot().
+ *
+ * Uses emit override to guarantee we intercept login_plugin_request
+ * before any default handler can auto-respond.
  */
 export function setupFML3Handshake(client: any): void {
-  // Remove the default handler that auto-responds with "not understood"
-  // (registered by minecraft-protocol's pluginChannels.js)
-  client.removeAllListeners('login_plugin_request');
+  // Override emit to intercept login_plugin_request at the source.
+  // This is more reliable than removeAllListeners because it doesn't
+  // matter when the default handler is registered — we catch the event
+  // before ANY handler sees it.
+  const originalEmit = client.emit.bind(client);
 
-  logger.info('FML3: Installed custom handshake handler');
-
-  client.on('login_plugin_request', (packet: any) => {
-    const { messageId, channel, data } = packet;
-
-    // Non-FML3 channels — respond with "not understood" (vanilla behavior)
-    if (channel !== 'fml:loginwrapper' || !data) {
-      client.write('login_plugin_response', {
-        messageId,
-        data: undefined,
-      });
-      return;
+  client.emit = function (event: string, ...args: any[]) {
+    if (event === 'login_plugin_request') {
+      handleLoginPluginRequest(client, args[0]);
+      return true; // Event "handled" — default handler never fires
     }
+    return originalEmit(event, ...args);
+  };
 
-    try {
-      const inner = unwrapLoginPacket(data);
-      const [packetId, offset] = readVarInt(inner.payload, 0);
-
-      logger.debug(`FML3: Received packet ${packetId} on ${inner.channel} (msgId=${messageId})`);
-
-      if (packetId === S2C_MOD_LIST) {
-        const serverMods = parseS2CModList(inner.payload, offset);
-        logger.info(
-          `FML3: Server has ${serverMods.mods.length} mods, ` +
-          `${serverMods.channels.length} channels, ` +
-          `${serverMods.registries.length} registries`
-        );
-
-        const reply = buildC2SModListReply(serverMods);
-        client.write('login_plugin_response', {
-          messageId,
-          data: wrapLoginPacket(inner.channel, reply),
-        });
-        logger.info('FML3: Sent mod list reply (echoed server mods)');
-
-      } else if (packetId === S2C_REGISTRY || packetId === S2C_CONFIG_DATA) {
-        const ack = buildAcknowledge();
-        client.write('login_plugin_response', {
-          messageId,
-          data: wrapLoginPacket(inner.channel, ack),
-        });
-        logger.debug(`FML3: Acknowledged packet ${packetId}`);
-
-      } else {
-        // Unknown FML3 packet — acknowledge it generically
-        const ack = buildAcknowledge();
-        client.write('login_plugin_response', {
-          messageId,
-          data: wrapLoginPacket(inner.channel, ack),
-        });
-        logger.debug(`FML3: Acknowledged unknown packet ${packetId}`);
-      }
-
-    } catch (err) {
-      logger.error('FML3: Error handling packet:', err);
-      // Fall back to "not understood" so we don't hang
-      client.write('login_plugin_response', {
-        messageId,
-        data: undefined,
-      });
-    }
-  });
+  logger.info(`FML3: Installed handshake handler (emit override)`);
 }
