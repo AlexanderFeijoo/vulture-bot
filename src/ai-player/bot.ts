@@ -4,6 +4,7 @@ import mineflayer, { type Bot } from 'mineflayer';
 import 'mineflayer-pathfinder'; // type augmentation only
 import { logger } from '../utils/logger.js';
 import type { AIPlayerConfig } from './types.js';
+import { setupFML3Handshake } from './fml3-handshake.js';
 
 const require = createRequire(import.meta.url);
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
@@ -52,6 +53,10 @@ export class AIPlayerBot extends EventEmitter {
           // FML3 marker tells Forge server we speak Forge protocol
           fakeHost: `${this.config.host}\0FML3\0`,
         });
+
+        // Replace minecraft-protocol's default "not understood" auto-responder
+        // with our FML3 handshake handler that negotiates with Forge
+        setupFML3Handshake((this.bot as any)._client);
 
         this.bot.loadPlugin(pathfinder);
         this.bot.loadPlugin(collectBlock);
