@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url);
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
 const { plugin: collectBlock } = require('mineflayer-collectblock');
 const { loader: autoEat } = require('mineflayer-auto-eat');
+const { autoVersionForge } = require('minecraft-protocol-forge');
 
 export class AIPlayerBot extends EventEmitter {
   private bot: Bot | null = null;
@@ -47,9 +48,12 @@ export class AIPlayerBot extends EventEmitter {
           port: this.config.port,
           username: this.config.username,
           auth: this.config.auth,
-          version: '1.20.1',
+          version: false as any, // Let forge handshake detect version
           hideErrors: false,
         });
+
+        // Handle Forge handshake — auto-detect server mods and respond
+        autoVersionForge((this.bot as any)._client);
 
         this.bot.loadPlugin(pathfinder);
         this.bot.loadPlugin(collectBlock);
