@@ -170,6 +170,13 @@ export class AIBrain {
       content: entry.content,
     }));
 
+    // Show thinking indicator in-game
+    try {
+      await this.botWrapper.sendCommand('thinking start');
+    } catch (e) {
+      logger.debug('Failed to send thinking start', e);
+    }
+
     try {
       const response = await this.client.messages.create({
         model: this.config.modelId,
@@ -207,6 +214,12 @@ export class AIBrain {
         this.thinkCooldownMs = Math.min(this.thinkCooldownMs * 2, 60000);
       } else {
         throw err;
+      }
+    } finally {
+      try {
+        await this.botWrapper.sendCommand('thinking stop');
+      } catch (e) {
+        logger.debug('Failed to send thinking stop', e);
       }
     }
   }
@@ -246,14 +259,14 @@ export class AIBrain {
     this.dailyInputTokens += inputTokens;
     this.dailyOutputTokens += outputTokens;
 
-    const estimatedCost = (this.dailyInputTokens / 1_000_000) * 3 + (this.dailyOutputTokens / 1_000_000) * 15;
+    const estimatedCost = (this.dailyInputTokens / 1_000_000) * 1 + (this.dailyOutputTokens / 1_000_000) * 5;
     logger.debug(`AIBrain daily cost estimate: $${estimatedCost.toFixed(2)} (${this.dailyInputTokens} in / ${this.dailyOutputTokens} out)`);
   }
 
   private isOverBudget(): boolean {
     const today = new Date().toISOString().split('T')[0];
     if (today !== this.dailyResetDate) return false;
-    const estimatedCost = (this.dailyInputTokens / 1_000_000) * 3 + (this.dailyOutputTokens / 1_000_000) * 15;
+    const estimatedCost = (this.dailyInputTokens / 1_000_000) * 1 + (this.dailyOutputTokens / 1_000_000) * 5;
     return estimatedCost >= this.config.maxDailySpend;
   }
 }

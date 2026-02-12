@@ -77,7 +77,7 @@ export const config = {
         enabled: true as const,
         username: env('AI_PLAYER_USERNAME', 'NuncleNelson'),
         anthropicApiKey: env('ANTHROPIC_API_KEY'),
-        modelId: env('AI_PLAYER_MODEL', 'claude-sonnet-4-5-20250929'),
+        modelId: env('AI_PLAYER_MODEL', 'claude-haiku-4-5-20251001'),
         maxDailySpend: envFloat('AI_PLAYER_MAX_DAILY_SPEND', 10.0),
         personalityFile: env('AI_PLAYER_PERSONALITY_FILE', 'data/ai-personality.txt'),
         memoryFile: env('AI_PLAYER_MEMORY_FILE', 'data/ai-memory.json'),

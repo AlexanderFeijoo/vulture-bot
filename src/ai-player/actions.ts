@@ -101,6 +101,29 @@ export const ACTION_TOOLS = [
     },
   },
 
+  // Items
+  {
+    name: 'pickupItem',
+    description: 'Pick up nearby items from the ground. Optionally filter by item name.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        itemFilter: { type: 'string', description: 'Optional item name to filter for (e.g. "iron_ingot")' },
+      },
+    },
+  },
+  {
+    name: 'dropItem',
+    description: 'Drop an item from your inventory on the ground.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        itemName: { type: 'string', description: 'Name of the item to drop (e.g. "cobblestone")' },
+      },
+      required: ['itemName'],
+    },
+  },
+
   // Memory / Meta
   {
     name: 'setGoal',
@@ -224,6 +247,14 @@ export class ActionExecutor {
 
         case 'lookAt':
           return await this.bot.sendCommand(`look ${args.x} ${args.y} ${args.z}`);
+
+        case 'pickupItem': {
+          const filter = args.itemFilter ? ` ${args.itemFilter}` : '';
+          return await this.bot.sendCommand(`pickup${filter}`);
+        }
+
+        case 'dropItem':
+          return await this.bot.sendCommand(`drop ${args.itemName}`);
 
         // Memory actions (local, no RCON)
         case 'setGoal':

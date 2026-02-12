@@ -8,6 +8,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
@@ -20,6 +21,7 @@ public class NuncleObserver {
 
     private static final int ENTITY_SCAN_RADIUS = 32;
     private static final int BLOCK_SCAN_RADIUS = 8;
+    private static final int ITEM_SCAN_RADIUS = 8;
 
     private static final Set<String> HOSTILE_MOBS = Set.of(
         "zombie", "skeleton", "creeper", "spider", "cave_spider",
@@ -82,6 +84,20 @@ public class NuncleObserver {
         self.addProperty("maxHealth", Math.round(npc.getMaxHealth() * 10.0) / 10.0);
         json.add("self", self);
 
+        // Inventory
+        JsonArray invItems = new JsonArray();
+        for (int i = 0; i < npc.getInventory().getContainerSize(); i++) {
+            ItemStack stack = npc.getInventory().getItem(i);
+            if (!stack.isEmpty()) {
+                JsonObject item = new JsonObject();
+                item.addProperty("name", stack.getItem().getDescriptionId()
+                    .replace("item.minecraft.", "").replace("block.minecraft.", ""));
+                item.addProperty("count", stack.getCount());
+                invItems.add(item);
+            }
+        }
+        json.add("inventory", invItems);
+
         // Time & weather
         ServerLevel level = (ServerLevel) npc.level();
         long timeOfDay = level.getDayTime() % 24000;
@@ -135,6 +151,29 @@ public class NuncleObserver {
             if (++entityCount >= 15) break;
         }
         json.add("nearbyEntities", entArr);
+
+        // Nearby ground items
+        AABB itemArea = npc.getBoundingBox().inflate(ITEM_SCAN_RADIUS);
+        List<Entity> itemEntities = npc.level().getEntities(npc, itemArea);
+        JsonArray groundItems = new JsonArray();
+        int itemCount = 0;
+        for (Entity e : itemEntities) {
+            if (!(e instanceof ItemEntity itemEntity)) continue;
+            if (!itemEntity.isAlive()) continue;
+
+            ItemStack stack = itemEntity.getItem();
+            String itemName = stack.getItem().getDescriptionId()
+                .replace("item.minecraft.", "").replace("block.minecraft.", "");
+            double dist = npc.distanceTo(e);
+
+            JsonObject ij = new JsonObject();
+            ij.addProperty("name", itemName);
+            ij.addProperty("count", stack.getCount());
+            ij.addProperty("distance", (int) dist);
+            groundItems.add(ij);
+            if (++itemCount >= 10) break;
+        }
+        json.add("groundItems", groundItems);
 
         // Notable blocks
         JsonArray blocks = new JsonArray();

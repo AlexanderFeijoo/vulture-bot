@@ -80,6 +80,24 @@ public class NuncleCommands {
                     .then(Commands.argument("y", IntegerArgumentType.integer())
                         .then(Commands.argument("z", IntegerArgumentType.integer())
                             .executes(NuncleCommands::mine)))))
+
+            // /nuncle pickup [itemFilter]
+            .then(Commands.literal("pickup")
+                .executes(NuncleCommands::pickupAll)
+                .then(Commands.argument("itemFilter", StringArgumentType.greedyString())
+                    .executes(NuncleCommands::pickupFiltered)))
+
+            // /nuncle drop <itemName>
+            .then(Commands.literal("drop")
+                .then(Commands.argument("itemName", StringArgumentType.greedyString())
+                    .executes(NuncleCommands::dropItem)))
+
+            // /nuncle thinking start|stop
+            .then(Commands.literal("thinking")
+                .then(Commands.literal("start")
+                    .executes(NuncleCommands::thinkingStart))
+                .then(Commands.literal("stop")
+                    .executes(NuncleCommands::thinkingStop)))
         );
     }
 
@@ -161,5 +179,27 @@ public class NuncleCommands {
         int y = IntegerArgumentType.getInteger(ctx, "y");
         int z = IntegerArgumentType.getInteger(ctx, "z");
         return reply(ctx, mgr().mine(x, y, z));
+    }
+
+    private static int pickupAll(CommandContext<CommandSourceStack> ctx) {
+        return reply(ctx, mgr().pickup(null));
+    }
+
+    private static int pickupFiltered(CommandContext<CommandSourceStack> ctx) {
+        String filter = StringArgumentType.getString(ctx, "itemFilter");
+        return reply(ctx, mgr().pickup(filter));
+    }
+
+    private static int dropItem(CommandContext<CommandSourceStack> ctx) {
+        String itemName = StringArgumentType.getString(ctx, "itemName");
+        return reply(ctx, mgr().dropItem(itemName));
+    }
+
+    private static int thinkingStart(CommandContext<CommandSourceStack> ctx) {
+        return reply(ctx, mgr().setThinking(true));
+    }
+
+    private static int thinkingStop(CommandContext<CommandSourceStack> ctx) {
+        return reply(ctx, mgr().setThinking(false));
     }
 }
