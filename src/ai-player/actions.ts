@@ -1,6 +1,9 @@
 import type { Bot } from 'mineflayer';
-import pathfinderPkg from 'mineflayer-pathfinder';
-const { goals: Goals } = pathfinderPkg;
+import 'mineflayer-pathfinder'; // type augmentation
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { goals: Goals } = require('mineflayer-pathfinder');
 import { logger } from '../utils/logger.js';
 import type { PersistentMemory } from './memory.js';
 

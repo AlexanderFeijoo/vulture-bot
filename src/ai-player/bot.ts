@@ -1,14 +1,14 @@
 import { EventEmitter } from 'node:events';
+import { createRequire } from 'node:module';
 import mineflayer, { type Bot } from 'mineflayer';
-import pathfinderPkg from 'mineflayer-pathfinder';
-const { pathfinder, Movements, goals } = pathfinderPkg;
-import collectBlockPkg from 'mineflayer-collectblock';
-const { plugin: collectBlock } = collectBlockPkg;
-// @ts-ignore — CJS module with no default export declaration
-import autoEatPkg from 'mineflayer-auto-eat';
-const autoEat = autoEatPkg.loader ?? autoEatPkg;
+import 'mineflayer-pathfinder'; // type augmentation only
 import { logger } from '../utils/logger.js';
 import type { AIPlayerConfig } from './types.js';
+
+const require = createRequire(import.meta.url);
+const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
+const { plugin: collectBlock } = require('mineflayer-collectblock');
+const { loader: autoEat } = require('mineflayer-auto-eat');
 
 export class AIPlayerBot extends EventEmitter {
   private bot: Bot | null = null;
