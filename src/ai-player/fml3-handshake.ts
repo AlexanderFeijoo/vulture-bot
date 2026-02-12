@@ -139,12 +139,15 @@ function buildAcknowledge(): Buffer {
 // FML3 wraps inner handshake packets inside fml:loginwrapper
 
 function unwrapLoginPacket(data: Buffer): { channel: string; payload: Buffer } {
-  const [channel, offset] = readString(data, 0);
-  return { channel, payload: data.subarray(offset) };
+  const [channel, offset1] = readString(data, 0);
+  // Forge includes a VarInt length prefix after the channel name
+  const [payloadLength, offset2] = readVarInt(data, offset1);
+  return { channel, payload: data.subarray(offset2, offset2 + payloadLength) };
 }
 
 function wrapLoginPacket(innerChannel: string, innerData: Buffer): Buffer {
-  return Buffer.concat([writeString(innerChannel), innerData]);
+  // Must include VarInt length prefix — server expects: [channel][length][data]
+  return Buffer.concat([writeString(innerChannel), writeVarInt(innerData.length), innerData]);
 }
 
 // --- FML3 packet handler ---
@@ -168,7 +171,7 @@ function handleLoginPluginRequest(client: any, packet: any): void {
     const inner = unwrapLoginPacket(data);
     const [packetId, offset] = readVarInt(inner.payload, 0);
 
-    logger.info(`FML3: Inner packet ID=${packetId} on channel="${inner.channel}" (${inner.payload.length} bytes)`);
+    logger.info(`FML3: Inner packet ID=${packetId} on channel="${inner.channel}" (${inner.payload.length} bytes, first bytes: ${inner.payload.subarray(0, 8).toString('hex')})`);
 
     if (packetId === S2C_MOD_LIST) {
       const serverMods = parseS2CModList(inner.payload, offset);
