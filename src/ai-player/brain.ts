@@ -18,12 +18,12 @@ export class AIBrain {
   private botWrapper: AIPlayerBot;
   private memory: PersistentMemory;
   private personality: string;
-  private executor: ActionExecutor | null = null;
+  private executor: ActionExecutor;
 
   private conversationHistory: ConversationEntry[] = [];
   private eventBuffer: string[] = [];
   private lastThinkTime = 0;
-  private thinkCooldownMs = 5000; // Min 5s between thinks
+  private thinkCooldownMs = 5000;
   private isThinking = false;
   private idleTimer: ReturnType<typeof setInterval> | null = null;
   private stopped = false;
@@ -44,15 +44,10 @@ export class AIBrain {
     this.memory = memory;
     this.personality = personality;
     this.client = new Anthropic({ apiKey: config.anthropicApiKey });
+    this.executor = new ActionExecutor(botWrapper, memory, config.boundary);
   }
 
   start(): void {
-    if (!this.botWrapper.mcBot) {
-      logger.warn('AIBrain: Cannot start — bot not connected');
-      return;
-    }
-
-    this.executor = new ActionExecutor(this.botWrapper.mcBot, this.memory, this.config.boundary);
     this.stopped = false;
 
     // Wire up triggers
@@ -61,8 +56,8 @@ export class AIBrain {
       this.triggerThink('chat');
     });
 
-    this.botWrapper.on('damaged', () => {
-      this.addEvent('You took damage!');
+    this.botWrapper.on('damaged', (data: string) => {
+      this.addEvent(`You took damage! (${data})`);
       this.triggerThink('damage');
     });
 
@@ -80,7 +75,7 @@ export class AIBrain {
       this.addEvent(`${username} left the server.`);
     });
 
-    // Periodic idle check — every 45 seconds
+    // Periodic idle check
     this.idleTimer = setInterval(() => {
       if (!this.isThinking && !this.stopped) {
         this.triggerThink('periodic');
@@ -107,7 +102,6 @@ export class AIBrain {
   private addEvent(event: string): void {
     const timeStr = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
     this.eventBuffer.push(`[${timeStr}] ${event}`);
-    // Keep last 20 events
     if (this.eventBuffer.length > 20) {
       this.eventBuffer.shift();
     }
@@ -115,13 +109,11 @@ export class AIBrain {
 
   private async triggerThink(trigger: ThinkTrigger): Promise<void> {
     if (this.stopped || this.isThinking) return;
-    if (!this.botWrapper.mcBot || !this.executor) return;
+    if (!this.botWrapper.isConnected) return;
 
-    // Cooldown check
     const now = Date.now();
     if (now - this.lastThinkTime < this.thinkCooldownMs) return;
 
-    // Daily cost check
     if (this.isOverBudget()) {
       logger.warn('AIBrain: Daily budget exceeded, skipping think cycle');
       return;
@@ -140,16 +132,20 @@ export class AIBrain {
   }
 
   private async thinkCycle(trigger: ThinkTrigger): Promise<void> {
-    if (!this.botWrapper.mcBot) return;
-
-    // Gather observations
-    const observation = observeGameState(this.botWrapper.mcBot);
+    // Gather observations via RCON
+    const observation = await observeGameState(this.botWrapper);
     observation.recentEvents = [...this.eventBuffer];
+
+    // Update executor's position knowledge
+    this.executor.setPosition(
+      observation.self.position.x,
+      observation.self.position.y,
+      observation.self.position.z,
+    );
 
     const observationText = formatObservation(observation);
     const memorySummary = this.memory.getMemorySummary();
 
-    // Build user message
     const userMessage = [
       `[Trigger: ${trigger}]`,
       '',
@@ -159,19 +155,16 @@ export class AIBrain {
       memorySummary || '(No memories yet)',
     ].join('\n');
 
-    // Add to conversation
     this.conversationHistory.push({
       role: 'user',
       content: userMessage,
       timestamp: Date.now(),
     });
 
-    // Trim conversation to last 20 entries
     if (this.conversationHistory.length > 20) {
       this.conversationHistory = this.conversationHistory.slice(-20);
     }
 
-    // Build messages for API
     const messages = this.conversationHistory.map((entry) => ({
       role: entry.role as 'user' | 'assistant',
       content: entry.content,
@@ -186,26 +179,22 @@ export class AIBrain {
         tools: ACTION_TOOLS as any,
       });
 
-      // Track costs
       this.trackCosts(response.usage.input_tokens, response.usage.output_tokens);
 
-      // Process response
       const results: string[] = [];
 
       for (const block of response.content) {
         if (block.type === 'text' && block.text) {
-          // Internal thoughts — log but don't broadcast
           logger.debug(`AIBrain thought: ${block.text}`);
           results.push(`(thought: ${block.text})`);
         } else if (block.type === 'tool_use') {
-          const actionResult = await this.executor!.execute(block.name, block.input as Record<string, any>);
-          logger.info(`AIBrain action: ${block.name}(${JSON.stringify(block.input)}) → ${actionResult}`);
+          const actionResult = await this.executor.execute(block.name, block.input as Record<string, any>);
+          logger.info(`AIBrain action: ${block.name}(${JSON.stringify(block.input)}) -> ${actionResult}`);
           results.push(actionResult);
           this.addEvent(`[You] ${actionResult}`);
         }
       }
 
-      // Add assistant response to history
       this.conversationHistory.push({
         role: 'assistant',
         content: results.join('\n') || '(idle)',
@@ -228,8 +217,9 @@ export class AIBrain {
       this.personality,
       '',
       `Your in-game name is "${name}".`,
+      'You appear as a villager NPC in the world.',
       '',
-      'You are playing Minecraft on a survival server. Observe your surroundings and decide what to do.',
+      'You are on a Minecraft survival server. Observe your surroundings and decide what to do.',
       'Choose ONE action per turn. Keep chat messages short and natural (like a real player).',
       'If nothing interesting is happening, pursue your current goal or explore.',
       'If someone talks to you, respond naturally. Be friendly but simple.',
@@ -240,7 +230,7 @@ export class AIBrain {
       const b = this.config.boundary;
       lines.push('');
       lines.push(`IMPORTANT: You must stay within ${b.radius} blocks of your home area (center: ${b.centerX}, ${b.centerZ}).`);
-      lines.push('Do not try to go beyond this boundary. If a player asks you to follow them far away, politely decline.');
+      lines.push('Do not try to go beyond this boundary.');
     }
 
     return lines.join('\n');

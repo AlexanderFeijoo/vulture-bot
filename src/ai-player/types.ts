@@ -7,9 +7,6 @@ export interface Boundary {
 export interface AIPlayerConfig {
   enabled: true;
   username: string;
-  auth: 'microsoft' | 'mojang' | 'offline';
-  host: string;
-  port: number;
   anthropicApiKey: string;
   modelId: string;
   maxDailySpend: number;
@@ -31,14 +28,15 @@ export interface NearbyPlayer {
 
 export interface NearbyEntity {
   name: string;
-  type: string;
   distance: number;
   hostile: boolean;
 }
 
 export interface NotableBlock {
   name: string;
-  position: Position;
+  x: number;
+  y: number;
+  z: number;
   distance: number;
 }
 
@@ -47,20 +45,10 @@ export interface GameObservation {
     position: Position;
     health: number;
     maxHealth: number;
-    food: number;
-    saturation: number;
-    heldItem: string | null;
-    armor: string[];
-    experience: { level: number; points: number };
   };
-  time: {
-    timeOfDay: string;
-    age: number;
-  };
+  time: string;
   weather: string;
   biome: string;
-  inventory: { name: string; count: number }[];
-  inventorySlots: { used: number; total: number };
   nearbyPlayers: NearbyPlayer[];
   nearbyEntities: NearbyEntity[];
   notableBlocks: NotableBlock[];

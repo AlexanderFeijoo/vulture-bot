@@ -62,7 +62,7 @@ async function main(): Promise<void> {
   let aiPlayer: AIPlayerInstance | null = null;
   if (config.aiPlayer) {
     try {
-      aiPlayer = await setupAIPlayer(tracker, messaging, rcon, config.aiPlayer);
+      aiPlayer = await setupAIPlayer(tracker, messaging, rcon, tailer, config.aiPlayer);
     } catch {
       logger.warn('AI Player failed to start — continuing without it');
     }
