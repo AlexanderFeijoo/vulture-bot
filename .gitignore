@@ -14,6 +14,9 @@ dev/mc-logs/
 .vscode/
 .idea/
 
+# AI Player runtime data (memory persists across sessions)
+data/ai-memory.json
+
 # OS
 .DS_Store
 Thumbs.db

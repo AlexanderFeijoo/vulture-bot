@@ -21,6 +21,20 @@ function envInt(key: string, fallback: number): number {
   return parsed;
 }
 
+function envFloat(key: string, fallback: number): number {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  const parsed = parseFloat(raw);
+  if (isNaN(parsed)) throw new Error(`Invalid float for ${key}: ${raw}`);
+  return parsed;
+}
+
+function envBool(key: string, fallback: boolean): boolean {
+  const raw = process.env[key];
+  if (!raw) return fallback;
+  return raw.toLowerCase() === 'true' || raw === '1';
+}
+
 export const config = {
   minecraft: {
     logPath: env('MC_LOG_PATH', './dev/mc-logs/latest.log'),
@@ -57,4 +71,19 @@ export const config = {
     logLevel: env('LOG_LEVEL', 'info'),
     rconReconcileIntervalMs: envInt('RCON_RECONCILE_INTERVAL_MS', 60000),
   },
+
+  aiPlayer: envBool('AI_PLAYER_ENABLED', false)
+    ? {
+        enabled: true as const,
+        username: env('AI_PLAYER_USERNAME'),
+        auth: env('AI_PLAYER_AUTH', 'microsoft') as 'microsoft' | 'mojang' | 'offline',
+        host: env('MC_RCON_HOST', '127.0.0.1'),
+        port: envInt('MC_SERVER_PORT', 25565),
+        anthropicApiKey: env('ANTHROPIC_API_KEY'),
+        modelId: env('AI_PLAYER_MODEL', 'claude-sonnet-4-5-20250929'),
+        maxDailySpend: envFloat('AI_PLAYER_MAX_DAILY_SPEND', 10.0),
+        personalityFile: env('AI_PLAYER_PERSONALITY_FILE', 'data/ai-personality.txt'),
+        memoryFile: env('AI_PLAYER_MEMORY_FILE', 'data/ai-memory.json'),
+      }
+    : null,
 } as const;

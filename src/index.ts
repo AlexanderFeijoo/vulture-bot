@@ -13,6 +13,7 @@ import { setupChatBridge } from './features/chat-bridge.js';
 import { setupMap } from './features/map.js';
 import { setupScoreboard } from './features/scoreboard.js';
 import { setupServerStatusEmbed } from './features/server-status-embed.js';
+import { setupAIPlayer, type AIPlayerInstance } from './ai-player/index.js';
 
 async function main(): Promise<void> {
   logger.info('Starting Vulture Bot...');
@@ -57,8 +58,19 @@ async function main(): Promise<void> {
   // --- Post-start features (need tracker running) ---
   await setupServerStatusEmbed(tracker, messaging);
 
+  // --- AI Player (optional) ---
+  let aiPlayer: AIPlayerInstance | null = null;
+  if (config.aiPlayer) {
+    try {
+      aiPlayer = await setupAIPlayer(tracker, messaging, rcon, config.aiPlayer);
+    } catch {
+      logger.warn('AI Player failed to start — continuing without it');
+    }
+  }
+
   // --- Graceful shutdown ---
   onShutdown(async () => {
+    if (aiPlayer) await aiPlayer.shutdown();
     tracker.stop();
     await rcon.disconnect();
     await messaging.disconnectAll();
