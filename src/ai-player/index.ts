@@ -33,8 +33,8 @@ export async function setupAIPlayer(
   // Create RCON-based bot
   const bot = new AIPlayerBot(config, rcon);
 
-  // Create brain
-  const brain = new AIBrain(config, bot, memory, personality);
+  // Create brain (pass player count so it can sleep when server is empty)
+  const brain = new AIBrain(config, bot, memory, personality, () => tracker.getPlayerCount());
 
   // Wire log tailer events to bot
   tailer.on('line', (line: string) => {
@@ -61,20 +61,7 @@ export async function setupAIPlayer(
     }
   });
 
-  // Spawn the NPC
-  try {
-    await bot.connect();
-  } catch (err) {
-    logger.error('AI Player failed to spawn NPC:', err);
-    throw err;
-  }
-
-  // Start brain after bot spawns
-  bot.on('spawned', () => {
-    brain.start();
-    logger.info('AI Player brain activated');
-  });
-
+  // Handle respawn after death (wire before first connect so it's ready)
   bot.on('died', () => {
     logger.info('NPC died, will respawn in 10s');
     setTimeout(async () => {
@@ -85,6 +72,17 @@ export async function setupAIPlayer(
       }
     }, 10000);
   });
+
+  // Start brain once — it handles spawned/died events internally
+  brain.start();
+
+  // Spawn the NPC
+  try {
+    await bot.connect();
+  } catch (err) {
+    logger.error('AI Player failed to spawn NPC:', err);
+    throw err;
+  }
 
   logger.info(`AI Player "${config.username}" is online (RCON mode)`);
 

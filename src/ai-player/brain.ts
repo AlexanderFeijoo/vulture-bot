@@ -19,6 +19,7 @@ export class AIBrain {
   private memory: PersistentMemory;
   private personality: string;
   private executor: ActionExecutor;
+  private getPlayerCount: () => number;
 
   private conversationHistory: ConversationEntry[] = [];
   private eventBuffer: string[] = [];
@@ -27,6 +28,7 @@ export class AIBrain {
   private isThinking = false;
   private idleTimer: ReturnType<typeof setInterval> | null = null;
   private stopped = false;
+  private sleeping = false;
 
   // Cost tracking
   private dailyInputTokens = 0;
@@ -38,11 +40,13 @@ export class AIBrain {
     botWrapper: AIPlayerBot,
     memory: PersistentMemory,
     personality: string,
+    getPlayerCount: () => number,
   ) {
     this.config = config;
     this.botWrapper = botWrapper;
     this.memory = memory;
     this.personality = personality;
+    this.getPlayerCount = getPlayerCount;
     this.client = new Anthropic({ apiKey: config.anthropicApiKey });
     this.executor = new ActionExecutor(botWrapper, memory, config.boundary);
   }
@@ -53,50 +57,105 @@ export class AIBrain {
     // Wire up triggers
     this.botWrapper.on('chat', (username: string, message: string) => {
       this.addEvent(`${username}: "${message}"`);
+      if (this.sleeping) this.wake('chat from ' + username);
       this.triggerThink('chat');
     });
 
     this.botWrapper.on('damaged', (data: string) => {
       this.addEvent(`You took damage! (${data})`);
+      if (this.sleeping) this.wake('took damage');
       this.triggerThink('damage');
     });
 
     this.botWrapper.on('died', () => {
       this.addEvent('You died!');
-      this.triggerThink('event');
+      // Dead NPC = no reason to think
+      this.sleep();
+    });
+
+    this.botWrapper.on('spawned', () => {
+      // Only wake if there are players to interact with
+      if (this.getPlayerCount() > 0) {
+        this.wake('respawned with players online');
+        this.triggerThink('event');
+      }
     });
 
     this.botWrapper.on('playerJoined', (username: string) => {
       this.addEvent(`${username} joined the server.`);
+      if (this.sleeping) this.wake(username + ' joined');
       this.triggerThink('event');
     });
 
     this.botWrapper.on('playerLeft', (username: string) => {
       this.addEvent(`${username} left the server.`);
+      // Check if server is now empty → sleep
+      if (!this.sleeping && this.getPlayerCount() === 0) {
+        this.sleep();
+      }
     });
 
-    // Periodic idle check
-    this.idleTimer = setInterval(() => {
-      if (!this.isThinking && !this.stopped) {
-        this.triggerThink('periodic');
-      }
-    }, 45000);
+    // Start in sleep mode if nobody is online
+    if (this.getPlayerCount() === 0) {
+      this.sleep();
+    } else {
+      this.startIdleTimer();
+    }
 
     logger.info('AIBrain started');
   }
 
   stop(): void {
     this.stopped = true;
+    this.stopIdleTimer();
+    this.botWrapper.removeAllListeners('chat');
+    this.botWrapper.removeAllListeners('damaged');
+    this.botWrapper.removeAllListeners('died');
+    this.botWrapper.removeAllListeners('spawned');
+    this.botWrapper.removeAllListeners('playerJoined');
+    this.botWrapper.removeAllListeners('playerLeft');
+    logger.info('AIBrain stopped');
+  }
+
+  private sleep(): void {
+    if (this.sleeping) return;
+    this.sleeping = true;
+    this.stopIdleTimer();
+    logger.info('AIBrain entering sleep mode (no players online or NPC dead)');
+    // Announce in-game (fire-and-forget)
+    if (this.botWrapper.isConnected) {
+      this.botWrapper.sendCommand('chat *yawns and curls up for a nap*').catch(() => {});
+    }
+  }
+
+  private wake(reason: string): void {
+    if (!this.sleeping) return;
+    // Don't wake if NPC is dead
+    if (!this.botWrapper.isConnected) {
+      logger.debug(`AIBrain wake blocked — NPC not alive (reason: ${reason})`);
+      return;
+    }
+    this.sleeping = false;
+    this.startIdleTimer();
+    logger.info(`AIBrain waking up: ${reason}`);
+    // Announce in-game (fire-and-forget)
+    this.botWrapper.sendCommand('chat *wakes up and stretches*').catch(() => {});
+  }
+
+  private startIdleTimer(): void {
+    if (this.idleTimer) return;
+    this.idleTimer = setInterval(() => {
+      if (!this.isThinking && !this.stopped && !this.sleeping) {
+        this.triggerThink('periodic');
+      }
+    }, 45000);
+  }
+
+  private stopIdleTimer(): void {
     if (this.idleTimer) {
       clearInterval(this.idleTimer);
       this.idleTimer = null;
     }
-    this.botWrapper.removeAllListeners('chat');
-    this.botWrapper.removeAllListeners('damaged');
-    this.botWrapper.removeAllListeners('died');
-    this.botWrapper.removeAllListeners('playerJoined');
-    this.botWrapper.removeAllListeners('playerLeft');
-    logger.info('AIBrain stopped');
   }
 
   private addEvent(event: string): void {
@@ -108,7 +167,7 @@ export class AIBrain {
   }
 
   private async triggerThink(trigger: ThinkTrigger): Promise<void> {
-    if (this.stopped || this.isThinking) return;
+    if (this.stopped || this.isThinking || this.sleeping) return;
     if (!this.botWrapper.isConnected) return;
 
     const now = Date.now();
