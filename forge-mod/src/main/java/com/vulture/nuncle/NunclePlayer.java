@@ -57,7 +57,7 @@ public class NunclePlayer {
         ServerLevel level = server.overworld();
         npc = new Villager(EntityType.VILLAGER, level, VillagerType.PLAINS);
         npc.setCustomName(Component.literal(NuncleMod.NPC_NAME));
-        npc.setCustomNameAlwaysVisible(true);
+        npc.setCustomNameVisible(true);
         npc.moveTo(x, y, z, 0.0F, 0.0F);
         npc.setInvulnerable(false);
         npc.setPersistenceRequired();
