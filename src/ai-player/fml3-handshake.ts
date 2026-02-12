@@ -171,7 +171,18 @@ function handleLoginPluginRequest(client: any, packet: any): void {
     const inner = unwrapLoginPacket(data);
     const [packetId, offset] = readVarInt(inner.payload, 0);
 
-    logger.info(`FML3: Inner packet ID=${packetId} on channel="${inner.channel}" (${inner.payload.length} bytes, first bytes: ${inner.payload.subarray(0, 8).toString('hex')})`);
+    logger.info(`FML3: Inner packet ID=${packetId} on channel="${inner.channel}" (${inner.payload.length} bytes)`);
+
+    // Only handle fml:handshake — other inner channels (e.g. framework:handshake
+    // from Architectury) have their own protocols. Respond "not understood" for those.
+    if (inner.channel !== 'fml:handshake') {
+      logger.info(`FML3: Unknown inner channel "${inner.channel}", responding "not understood"`);
+      client.write('login_plugin_response', {
+        messageId,
+        data: undefined,
+      });
+      return;
+    }
 
     if (packetId === S2C_MOD_LIST) {
       const serverMods = parseS2CModList(inner.payload, offset);
@@ -192,17 +203,16 @@ function handleLoginPluginRequest(client: any, packet: any): void {
     } else if (packetId === S2C_REGISTRY || packetId === S2C_CONFIG_DATA) {
       const ack = buildAcknowledge();
       const wrapped = wrapLoginPacket(inner.channel, ack);
-      logger.info(`FML3: Acknowledging packet ID=${packetId} (${wrapped.length} bytes)`);
       client.write('login_plugin_response', {
         messageId,
         data: wrapped,
       });
 
     } else {
-      // Unknown FML3 packet — acknowledge it generically
+      // Unknown fml:handshake packet (e.g. ID=5 S2CChannelMismatchData) — ACK it
       const ack = buildAcknowledge();
       const wrapped = wrapLoginPacket(inner.channel, ack);
-      logger.info(`FML3: Acknowledging unknown packet ID=${packetId}`);
+      logger.info(`FML3: Acknowledging unknown fml:handshake packet ID=${packetId}`);
       client.write('login_plugin_response', {
         messageId,
         data: wrapped,
@@ -211,7 +221,6 @@ function handleLoginPluginRequest(client: any, packet: any): void {
 
   } catch (err) {
     logger.error('FML3: Error handling packet:', err);
-    // Fall back to "not understood" so we don't hang
     client.write('login_plugin_response', {
       messageId,
       data: undefined,
