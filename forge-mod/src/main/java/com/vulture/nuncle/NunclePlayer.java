@@ -240,7 +240,7 @@ public class NunclePlayer {
     public String pickup(@Nullable String itemFilter) {
         if (!isAlive()) return "NuncleNelson is not spawned";
 
-        AABB area = npc.getBoundingBox().inflate(4.0);
+        AABB area = npc.getBoundingBox().inflate(6.0);
         List<Entity> entities = npc.level().getEntities(npc, area);
 
         List<String> pickedUp = new ArrayList<>();
@@ -334,9 +334,9 @@ public class NunclePlayer {
             if (thinkingParticleTick % 10 == 0) {
                 ServerLevel level = (ServerLevel) npc.level();
                 level.sendParticles(
-                    ParticleTypes.ENCHANT,
+                    ParticleTypes.HAPPY_VILLAGER,
                     npc.getX(), npc.getY() + npc.getBbHeight() + 0.5, npc.getZ(),
-                    3, 0.2, 0.3, 0.2, 0.05);
+                    5, 0.3, 0.2, 0.3, 0.0);
             }
         }
 
