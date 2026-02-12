@@ -88,6 +88,13 @@ export const config = {
               radius: envInt('AI_PLAYER_BOUNDARY_RADIUS', 200),
             }
           : null,
+        spawnPosition: envOptional('AI_PLAYER_SPAWN_X')
+          ? {
+              x: envInt('AI_PLAYER_SPAWN_X', 0),
+              y: envInt('AI_PLAYER_SPAWN_Y', 64),
+              z: envInt('AI_PLAYER_SPAWN_Z', 0),
+            }
+          : null,
       }
     : null,
 } as const;

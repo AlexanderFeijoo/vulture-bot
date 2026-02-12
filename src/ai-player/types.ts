@@ -13,6 +13,7 @@ export interface AIPlayerConfig {
   personalityFile: string;
   memoryFile: string;
   boundary: Boundary | null;
+  spawnPosition: Position | null;
 }
 
 export interface Position {

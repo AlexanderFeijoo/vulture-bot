@@ -30,7 +30,9 @@ export class AIPlayerBot extends EventEmitter {
     logger.info(`Spawning NPC ${this.config.username} via RCON...`);
 
     try {
-      const response = await this.rcon.sendCommand('nuncle spawn');
+      const sp = this.config.spawnPosition;
+      const cmd = sp ? `nuncle spawn ${sp.x} ${sp.y} ${sp.z}` : 'nuncle spawn';
+      const response = await this.rcon.sendCommand(cmd);
       logger.info(`NPC spawn response: ${response}`);
       this.spawned = true;
       // Emit spawned on next tick to allow event listeners to be set up
