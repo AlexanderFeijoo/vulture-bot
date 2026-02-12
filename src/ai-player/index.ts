@@ -41,14 +41,22 @@ export async function setupAIPlayer(
     // Check for [NUNCLE] events from the Forge mod
     const nuncleMatch = line.match(/\[NUNCLE\] (\w+)(?: (.*))?$/);
     if (nuncleMatch) {
-      bot.handleNuncleEvent(nuncleMatch[1], nuncleMatch[2] ?? '');
-      return;
-    }
+      const event = nuncleMatch[1];
+      const data = nuncleMatch[2] ?? '';
 
-    // Forward chat events to bot
-    const chatMatch = line.match(/\[net\.minecraft\.server\.MinecraftServer\/\]:\s*<(\w+)> (.+)$/);
-    if (chatMatch) {
-      bot.handleChat(chatMatch[1], chatMatch[2]);
+      // HEARD = proximity-filtered chat (player is within 32 blocks)
+      if (event === 'HEARD') {
+        const spaceIdx = data.indexOf(' ');
+        if (spaceIdx > 0) {
+          const player = data.substring(0, spaceIdx);
+          const message = data.substring(spaceIdx + 1);
+          bot.handleChat(player, message);
+        }
+      } else {
+        // All other NUNCLE events (DAMAGED, DIED, SPAWNED, etc.)
+        bot.handleNuncleEvent(event, data);
+      }
+      return;
     }
   });
 
@@ -58,6 +66,15 @@ export async function setupAIPlayer(
       bot.handlePlayerJoined(event.player);
     } else if (event.type === 'player_leave' && event.player) {
       bot.handlePlayerLeft(event.player);
+    }
+  });
+
+  // Sync boundary config to Forge mod on every spawn
+  bot.on('spawned', async () => {
+    if (config.boundary) {
+      const { centerX, centerZ, radius } = config.boundary;
+      await bot.sendCommand(`boundary set ${centerX} ${centerZ} ${radius}`);
+      logger.info(`Boundary synced to mod: center=(${centerX},${centerZ}) radius=${radius}`);
     }
   });
 

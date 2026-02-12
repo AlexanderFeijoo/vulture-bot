@@ -249,13 +249,16 @@ export class AIBrain {
 
       const results: string[] = [];
 
+      let lastThought = '';
       for (const block of response.content) {
         if (block.type === 'text' && block.text) {
-          logger.debug(`AIBrain thought: ${block.text}`);
+          lastThought = block.text;
+          logger.info(`AIBrain reason: ${block.text}`);
           results.push(`(thought: ${block.text})`);
         } else if (block.type === 'tool_use') {
           const actionResult = await this.executor.execute(block.name, block.input as Record<string, any>);
-          logger.info(`AIBrain action: ${block.name}(${JSON.stringify(block.input)}) -> ${actionResult}`);
+          const reason = lastThought ? ` (reason: ${lastThought})` : '';
+          logger.info(`AIBrain action: ${block.name}(${JSON.stringify(block.input)}) -> ${actionResult}${reason}`);
           results.push(actionResult);
           this.addEvent(`[You] ${actionResult}`);
         }
@@ -285,6 +288,7 @@ export class AIBrain {
 
   private buildSystemPrompt(): string {
     const name = this.memory.memory.identity.name || this.config.username;
+    const currentGoal = this.memory.memory.goals?.current || 'Find shelter away from monsters and dig a cave to live in';
     const lines = [
       this.personality,
       '',
@@ -292,17 +296,20 @@ export class AIBrain {
       'You appear as a villager NPC in the world.',
       '',
       'You are on a Minecraft survival server. Observe your surroundings and decide what to do.',
+      'ALWAYS output a short text thought (1 sentence) explaining WHY you chose your action before using a tool.',
       'Choose ONE action per turn. Keep chat messages short and natural (like a real player).',
-      'If nothing interesting is happening, pursue your current goal or explore.',
       'If someone talks to you, respond naturally. Be friendly but simple.',
       'If you are in danger (low health, hostile mob nearby), prioritize survival.',
+      '',
+      `YOUR CURRENT GOAL: ${currentGoal}`,
+      'When nothing else is happening, work toward this goal. Break it into small steps.',
+      'You can mine blocks, place blocks, pick up items, and use containers to work toward your goal.',
     ];
 
     if (this.config.boundary) {
       const b = this.config.boundary;
       lines.push('');
-      lines.push(`IMPORTANT: You must stay within ${b.radius} blocks of your home area (center: ${b.centerX}, ${b.centerZ}).`);
-      lines.push('Do not try to go beyond this boundary.');
+      lines.push(`BOUNDARY: You must stay within ${b.radius} blocks of center (${b.centerX}, ${b.centerZ}). The server enforces this.`);
     }
 
     return lines.join('\n');

@@ -124,6 +124,54 @@ export const ACTION_TOOLS = [
     },
   },
 
+  // Block placement
+  {
+    name: 'placeBlock',
+    description: 'Place a block from your inventory at a specific position. Must be within 6 blocks and position must be empty.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        x: { type: 'number', description: 'X coordinate' },
+        y: { type: 'number', description: 'Y coordinate' },
+        z: { type: 'number', description: 'Z coordinate' },
+        blockName: { type: 'string', description: 'Block name to place (e.g. "cobblestone", "oak_planks")' },
+      },
+      required: ['x', 'y', 'z', 'blockName'],
+    },
+  },
+
+  // Container access
+  {
+    name: 'takeFromContainer',
+    description: 'Take items from a container (chest, barrel, etc.) at a position. Must be within 6 blocks.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        x: { type: 'number', description: 'X coordinate of container' },
+        y: { type: 'number', description: 'Y coordinate of container' },
+        z: { type: 'number', description: 'Z coordinate of container' },
+        itemFilter: { type: 'string', description: 'Item name to filter for (optional - takes all if omitted)' },
+        count: { type: 'number', description: 'Max items to take (default 64)' },
+      },
+      required: ['x', 'y', 'z'],
+    },
+  },
+  {
+    name: 'putInContainer',
+    description: 'Put items from your inventory into a container (chest, barrel, etc.) at a position. Must be within 6 blocks.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        x: { type: 'number', description: 'X coordinate of container' },
+        y: { type: 'number', description: 'Y coordinate of container' },
+        z: { type: 'number', description: 'Z coordinate of container' },
+        itemName: { type: 'string', description: 'Item name to deposit (e.g. "cobblestone")' },
+        count: { type: 'number', description: 'Max items to put (default 64)' },
+      },
+      required: ['x', 'y', 'z', 'itemName'],
+    },
+  },
+
   // Memory / Meta
   {
     name: 'setGoal',
@@ -255,6 +303,26 @@ export class ActionExecutor {
 
         case 'dropItem':
           return await this.bot.sendCommand(`drop ${args.itemName}`);
+
+        case 'placeBlock':
+          return await this.bot.sendCommand(
+            `place ${Math.round(args.x)} ${Math.round(args.y)} ${Math.round(args.z)} ${args.blockName}`,
+          );
+
+        case 'takeFromContainer': {
+          const takeFilter = args.itemFilter ? ` ${args.itemFilter}` : '';
+          const takeCount = args.count ?? 64;
+          return await this.bot.sendCommand(
+            `take ${Math.round(args.x)} ${Math.round(args.y)} ${Math.round(args.z)}${takeFilter} ${takeCount}`,
+          );
+        }
+
+        case 'putInContainer': {
+          const putCount = args.count ?? 64;
+          return await this.bot.sendCommand(
+            `put ${Math.round(args.x)} ${Math.round(args.y)} ${Math.round(args.z)} ${args.itemName} ${putCount}`,
+          );
+        }
 
         // Memory actions (local, no RCON)
         case 'setGoal':

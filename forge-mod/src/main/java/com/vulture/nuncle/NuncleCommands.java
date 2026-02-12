@@ -5,9 +5,14 @@ import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
-import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.npc.Villager;
 
 public class NuncleCommands {
 
@@ -81,6 +86,14 @@ public class NuncleCommands {
                         .then(Commands.argument("z", IntegerArgumentType.integer())
                             .executes(NuncleCommands::mine)))))
 
+            // /nuncle place <x> <y> <z> <blockName>
+            .then(Commands.literal("place")
+                .then(Commands.argument("x", IntegerArgumentType.integer())
+                    .then(Commands.argument("y", IntegerArgumentType.integer())
+                        .then(Commands.argument("z", IntegerArgumentType.integer())
+                            .then(Commands.argument("blockName", StringArgumentType.word())
+                                .executes(NuncleCommands::placeBlock))))))
+
             // /nuncle pickup [itemFilter]
             .then(Commands.literal("pickup")
                 .executes(NuncleCommands::pickupAll)
@@ -92,6 +105,39 @@ public class NuncleCommands {
                 .then(Commands.argument("itemName", StringArgumentType.greedyString())
                     .executes(NuncleCommands::dropItem)))
 
+            // /nuncle take <x> <y> <z> [itemFilter] [count]
+            .then(Commands.literal("take")
+                .then(Commands.argument("x", IntegerArgumentType.integer())
+                    .then(Commands.argument("y", IntegerArgumentType.integer())
+                        .then(Commands.argument("z", IntegerArgumentType.integer())
+                            .executes(NuncleCommands::takeAll)
+                            .then(Commands.argument("itemFilter", StringArgumentType.word())
+                                .executes(NuncleCommands::takeFiltered)
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1))
+                                    .executes(NuncleCommands::takeFilteredCount)))))))
+
+            // /nuncle put <x> <y> <z> <itemName> [count]
+            .then(Commands.literal("put")
+                .then(Commands.argument("x", IntegerArgumentType.integer())
+                    .then(Commands.argument("y", IntegerArgumentType.integer())
+                        .then(Commands.argument("z", IntegerArgumentType.integer())
+                            .then(Commands.argument("itemName", StringArgumentType.word())
+                                .executes(NuncleCommands::putDefault)
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1))
+                                    .executes(NuncleCommands::putWithCount)))))))
+
+            // /nuncle boundary set|clear|info
+            .then(Commands.literal("boundary")
+                .then(Commands.literal("set")
+                    .then(Commands.argument("x", DoubleArgumentType.doubleArg())
+                        .then(Commands.argument("z", DoubleArgumentType.doubleArg())
+                            .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1))
+                                .executes(NuncleCommands::boundarySet)))))
+                .then(Commands.literal("clear")
+                    .executes(NuncleCommands::boundaryClear))
+                .then(Commands.literal("info")
+                    .executes(NuncleCommands::boundaryInfo)))
+
             // /nuncle thinking start|stop
             .then(Commands.literal("thinking")
                 .then(Commands.literal("start")
@@ -99,6 +145,10 @@ public class NuncleCommands {
                 .then(Commands.literal("stop")
                     .executes(NuncleCommands::thinkingStop)))
         );
+
+        // /nunclewhere — separate command, no permission required
+        dispatcher.register(Commands.literal("nunclewhere")
+            .executes(NuncleCommands::nuncleWhere));
     }
 
     private static int reply(CommandContext<CommandSourceStack> ctx, String msg) {
@@ -181,6 +231,14 @@ public class NuncleCommands {
         return reply(ctx, mgr().mine(x, y, z));
     }
 
+    private static int placeBlock(CommandContext<CommandSourceStack> ctx) {
+        int x = IntegerArgumentType.getInteger(ctx, "x");
+        int y = IntegerArgumentType.getInteger(ctx, "y");
+        int z = IntegerArgumentType.getInteger(ctx, "z");
+        String blockName = StringArgumentType.getString(ctx, "blockName");
+        return reply(ctx, mgr().placeBlock(x, y, z, blockName));
+    }
+
     private static int pickupAll(CommandContext<CommandSourceStack> ctx) {
         return reply(ctx, mgr().pickup(null));
     }
@@ -195,11 +253,99 @@ public class NuncleCommands {
         return reply(ctx, mgr().dropItem(itemName));
     }
 
+    private static int takeAll(CommandContext<CommandSourceStack> ctx) {
+        int x = IntegerArgumentType.getInteger(ctx, "x");
+        int y = IntegerArgumentType.getInteger(ctx, "y");
+        int z = IntegerArgumentType.getInteger(ctx, "z");
+        return reply(ctx, mgr().takeFromContainer(x, y, z, null, 64));
+    }
+
+    private static int takeFiltered(CommandContext<CommandSourceStack> ctx) {
+        int x = IntegerArgumentType.getInteger(ctx, "x");
+        int y = IntegerArgumentType.getInteger(ctx, "y");
+        int z = IntegerArgumentType.getInteger(ctx, "z");
+        String filter = StringArgumentType.getString(ctx, "itemFilter");
+        return reply(ctx, mgr().takeFromContainer(x, y, z, filter, 64));
+    }
+
+    private static int takeFilteredCount(CommandContext<CommandSourceStack> ctx) {
+        int x = IntegerArgumentType.getInteger(ctx, "x");
+        int y = IntegerArgumentType.getInteger(ctx, "y");
+        int z = IntegerArgumentType.getInteger(ctx, "z");
+        String filter = StringArgumentType.getString(ctx, "itemFilter");
+        int count = IntegerArgumentType.getInteger(ctx, "count");
+        return reply(ctx, mgr().takeFromContainer(x, y, z, filter, count));
+    }
+
+    private static int putDefault(CommandContext<CommandSourceStack> ctx) {
+        int x = IntegerArgumentType.getInteger(ctx, "x");
+        int y = IntegerArgumentType.getInteger(ctx, "y");
+        int z = IntegerArgumentType.getInteger(ctx, "z");
+        String itemName = StringArgumentType.getString(ctx, "itemName");
+        return reply(ctx, mgr().putInContainer(x, y, z, itemName, 64));
+    }
+
+    private static int putWithCount(CommandContext<CommandSourceStack> ctx) {
+        int x = IntegerArgumentType.getInteger(ctx, "x");
+        int y = IntegerArgumentType.getInteger(ctx, "y");
+        int z = IntegerArgumentType.getInteger(ctx, "z");
+        String itemName = StringArgumentType.getString(ctx, "itemName");
+        int count = IntegerArgumentType.getInteger(ctx, "count");
+        return reply(ctx, mgr().putInContainer(x, y, z, itemName, count));
+    }
+
+    private static int boundarySet(CommandContext<CommandSourceStack> ctx) {
+        double x = DoubleArgumentType.getDouble(ctx, "x");
+        double z = DoubleArgumentType.getDouble(ctx, "z");
+        double radius = DoubleArgumentType.getDouble(ctx, "radius");
+        return reply(ctx, mgr().setBoundary(x, z, radius));
+    }
+
+    private static int boundaryClear(CommandContext<CommandSourceStack> ctx) {
+        return reply(ctx, mgr().clearBoundary());
+    }
+
+    private static int boundaryInfo(CommandContext<CommandSourceStack> ctx) {
+        return reply(ctx, mgr().getBoundaryInfo());
+    }
+
     private static int thinkingStart(CommandContext<CommandSourceStack> ctx) {
         return reply(ctx, mgr().setThinking(true));
     }
 
     private static int thinkingStop(CommandContext<CommandSourceStack> ctx) {
         return reply(ctx, mgr().setThinking(false));
+    }
+
+    // /nunclewhere — any player, no permission required
+    private static int nuncleWhere(CommandContext<CommandSourceStack> ctx) {
+        NunclePlayer mgr = NuncleMod.getNpcManager();
+        Villager npc = mgr.getNpc();
+        if (npc == null || !npc.isAlive()) {
+            ctx.getSource().sendSuccess(() -> Component.literal("NuncleNelson is not currently spawned"), false);
+            return 1;
+        }
+
+        int x = (int) npc.getX();
+        int y = (int) npc.getY();
+        int z = (int) npc.getZ();
+        String biome = ((ServerLevel) npc.level()).getBiome(npc.blockPosition())
+            .unwrapKey().map(k -> k.location().getPath().replace("_", " ")).orElse("unknown");
+
+        Component coords = Component.literal(x + " " + y + " " + z)
+            .withStyle(style -> style
+                .withColor(ChatFormatting.AQUA)
+                .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/tp @s " + x + " " + y + " " + z))
+                .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Click to teleport")))
+            );
+
+        Component msg = Component.literal("[")
+            .append(Component.literal(NuncleMod.NPC_NAME).withStyle(ChatFormatting.GOLD))
+            .append(Component.literal("] at "))
+            .append(coords)
+            .append(Component.literal(" (" + biome + ")").withStyle(ChatFormatting.GRAY));
+
+        ctx.getSource().sendSuccess(() -> msg, false);
+        return 1;
     }
 }

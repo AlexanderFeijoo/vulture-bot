@@ -200,6 +200,12 @@ public class NuncleObserver {
         }
         json.add("notableBlocks", blocks);
 
+        // Boundary info
+        String boundaryInfo = mgr.getBoundaryInfo();
+        if (!boundaryInfo.equals("No boundary set")) {
+            json.addProperty("boundary", boundaryInfo);
+        }
+
         return json.toString();
     }
 
