@@ -175,13 +175,29 @@ export const ACTION_TOOLS = [
   // Memory / Meta
   {
     name: 'setGoal',
-    description: 'Update your current long-term goal.',
+    description: 'Update your current long-term goal. Optionally provide sub-tasks to break it into steps.',
     input_schema: {
       type: 'object' as const,
       properties: {
         goal: { type: 'string', description: 'New goal description' },
+        subTasks: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional ordered sub-tasks to complete this goal',
+        },
       },
       required: ['goal'],
+    },
+  },
+  {
+    name: 'completeSubTask',
+    description: 'Mark a sub-task as done by its index number (shown in your memory).',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        index: { type: 'number', description: 'Index of the sub-task to mark complete' },
+      },
+      required: ['index'],
     },
   },
   {
@@ -326,8 +342,11 @@ export class ActionExecutor {
 
         // Memory actions (local, no RCON)
         case 'setGoal':
-          this.memory.setGoal(args.goal);
-          return `Goal set: ${args.goal}`;
+          this.memory.setGoal(args.goal, args.subTasks);
+          return `Goal set: ${args.goal}` + (args.subTasks?.length ? ` (${args.subTasks.length} sub-tasks)` : '');
+
+        case 'completeSubTask':
+          return this.memory.completeSubTask(args.index);
 
         case 'rememberThing':
           this.memory.remember(args.key, args.value);

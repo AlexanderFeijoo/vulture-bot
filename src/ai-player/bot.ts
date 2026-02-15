@@ -77,11 +77,33 @@ export class AIPlayerBot extends EventEmitter {
         this.spawned = false;
         this.emit('died');
         break;
+      case 'SPAWNED':
+        this.spawned = true;
+        this.emit('spawned');
+        break;
       case 'SAID':
         // Our own chat, ignore
         break;
       default:
         logger.debug(`Unknown NUNCLE event: ${event} ${data}`);
+    }
+  }
+
+  /** Query /nuncle status via RCON and sync the spawned boolean */
+  async reconcileAliveState(): Promise<void> {
+    try {
+      const response = await this.rcon.sendCommand('nuncle status');
+      const wasSpawned = this.spawned;
+      // The mod returns "alive" or "dead" (or similar) in its status
+      this.spawned = response.toLowerCase().includes('alive');
+      if (this.spawned !== wasSpawned) {
+        logger.info(`Reconciled NPC state: was ${wasSpawned ? 'alive' : 'dead'}, now ${this.spawned ? 'alive' : 'dead'}`);
+        if (this.spawned) {
+          this.emit('spawned');
+        }
+      }
+    } catch (err) {
+      logger.warn('Failed to reconcile NPC alive state:', err);
     }
   }
 

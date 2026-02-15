@@ -13,6 +13,7 @@ const DEFAULT_MEMORY: AIMemory = {
   },
   goals: {
     current: 'Explore the world and make friends',
+    subTasks: [],
     completed: [],
   },
   sessionLog: [],
@@ -129,12 +130,23 @@ export class PersistentMemory {
     this.dirty = true;
   }
 
-  setGoal(goal: string): void {
+  setGoal(goal: string, subTasks?: string[]): void {
     if (this.data.goals.current && this.data.goals.current !== goal) {
       this.data.goals.completed.push(this.data.goals.current);
     }
     this.data.goals.current = goal;
+    this.data.goals.subTasks = (subTasks ?? []).map((task) => ({ task, done: false }));
     this.dirty = true;
+  }
+
+  completeSubTask(index: number): string {
+    const st = this.data.goals.subTasks;
+    if (!st || index < 0 || index >= st.length) {
+      return 'Invalid sub-task index.';
+    }
+    st[index].done = true;
+    this.dirty = true;
+    return `Completed: ${st[index].task}`;
   }
 
   addSessionLog(summary: string): void {
@@ -154,6 +166,13 @@ export class PersistentMemory {
 
     if (this.data.goals.current) {
       lines.push(`Current goal: ${this.data.goals.current}`);
+      const st = this.data.goals.subTasks;
+      if (st && st.length > 0) {
+        for (let i = 0; i < st.length; i++) {
+          const marker = st[i].done ? '[DONE]' : '[ ]';
+          lines.push(`  ${i}. ${marker} ${st[i].task}`);
+        }
+      }
     }
 
     const relEntries = Object.entries(this.data.relationships);

@@ -41,6 +41,17 @@ export interface NotableBlock {
   distance: number;
 }
 
+export interface InventoryItem {
+  name: string;
+  count: number;
+}
+
+export interface GroundItem {
+  name: string;
+  count: number;
+  distance: number;
+}
+
 export interface GameObservation {
   self: {
     position: Position;
@@ -53,6 +64,8 @@ export interface GameObservation {
   nearbyPlayers: NearbyPlayer[];
   nearbyEntities: NearbyEntity[];
   notableBlocks: NotableBlock[];
+  inventory: InventoryItem[];
+  groundItems: GroundItem[];
   recentEvents: string[];
 }
 
@@ -74,6 +87,7 @@ export interface AIMemory {
   knowledge: Record<string, unknown>;
   goals: {
     current: string;
+    subTasks: { task: string; done: boolean }[];
     completed: string[];
   };
   sessionLog: {

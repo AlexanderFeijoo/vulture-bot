@@ -90,22 +90,35 @@ export async function setupAIPlayer(
     }, 10000);
   });
 
+  // Reconcile alive state before starting brain (handles bot restart while NPC is alive)
+  await bot.reconcileAliveState();
+
   // Start brain once — it handles spawned/died events internally
   brain.start();
 
-  // Spawn the NPC
-  try {
-    await bot.connect();
-  } catch (err) {
-    logger.error('AI Player failed to spawn NPC:', err);
-    throw err;
+  // Spawn the NPC (if not already alive from reconciliation)
+  if (!bot.isConnected) {
+    try {
+      await bot.connect();
+    } catch (err) {
+      logger.error('AI Player failed to spawn NPC:', err);
+      throw err;
+    }
+  } else {
+    logger.info('NPC already alive (reconciled), skipping spawn');
   }
+
+  // Periodic alive-state reconciliation as safety net (every 60s)
+  const reconcileTimer = setInterval(async () => {
+    await bot.reconcileAliveState();
+  }, 60_000);
 
   logger.info(`AI Player "${config.username}" is online (RCON mode)`);
 
   return {
     shutdown: async () => {
       logger.info('Shutting down AI Player...');
+      clearInterval(reconcileTimer);
       brain.stop();
       await bot.disconnect();
       await memory.shutdown();

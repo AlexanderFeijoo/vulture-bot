@@ -1,6 +1,44 @@
 import { logger } from '../utils/logger.js';
 import type { AIPlayerBot } from './bot.js';
-import type { GameObservation } from './types.js';
+import type { GameObservation, InventoryItem, GroundItem } from './types.js';
+
+/** Priority map for notable blocks — higher = more interesting. Unlisted = 0 (filtered out). */
+const BLOCK_PRIORITY: Record<string, number> = {
+  // Extremely rare
+  ancient_debris: 10,
+  spawner: 10,
+  // Very rare ores
+  diamond_ore: 9,
+  deepslate_diamond_ore: 9,
+  emerald_ore: 9,
+  deepslate_emerald_ore: 9,
+  // Rare ores
+  gold_ore: 7,
+  deepslate_gold_ore: 7,
+  lapis_ore: 7,
+  deepslate_lapis_ore: 7,
+  redstone_ore: 6,
+  deepslate_redstone_ore: 6,
+  // Useful ores
+  iron_ore: 5,
+  deepslate_iron_ore: 5,
+  // Common ores (low priority — don't fixate on these)
+  copper_ore: 1,
+  deepslate_copper_ore: 1,
+  coal_ore: 1,
+  deepslate_coal_ore: 1,
+  // Structures / interesting
+  chest: 8,
+  barrel: 6,
+  crafting_table: 4,
+  furnace: 4,
+  blast_furnace: 4,
+  smoker: 4,
+  anvil: 5,
+  enchanting_table: 6,
+  brewing_stand: 5,
+  bed: 3,
+};
 
 /**
  * Observe game state by querying the Forge mod via RCON.
@@ -35,19 +73,48 @@ export async function observeGameState(bot: AIPlayerBot): Promise<GameObservatio
         distance: e.distance,
         hostile: e.hostile ?? false,
       })),
-      notableBlocks: (data.notableBlocks ?? []).map((b: any) => ({
-        name: b.name,
-        x: b.x,
-        y: b.y,
-        z: b.z,
-        distance: b.distance,
-      })),
+      notableBlocks: prioritizeBlocks(data.notableBlocks ?? []),
+      inventory: parseInventory(data.inventory),
+      groundItems: parseGroundItems(data.groundItems),
       recentEvents: [], // Filled by brain from event buffer
     };
   } catch (err) {
     logger.warn(`Failed to parse observe response: ${raw}`);
     return emptyObservation();
   }
+}
+
+function prioritizeBlocks(blocks: any[]): GameObservation['notableBlocks'] {
+  return blocks
+    .map((b: any) => ({
+      name: b.name as string,
+      x: b.x as number,
+      y: b.y as number,
+      z: b.z as number,
+      distance: b.distance as number,
+      priority: BLOCK_PRIORITY[b.name] ?? 0,
+    }))
+    .filter((b) => b.priority > 0)
+    .sort((a, b) => b.priority - a.priority || a.distance - b.distance)
+    .slice(0, 5)
+    .map(({ priority: _, ...rest }) => rest);
+}
+
+function parseInventory(raw: any): InventoryItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item: any) => ({
+    name: item.name ?? item.item ?? 'unknown',
+    count: item.count ?? item.quantity ?? 1,
+  }));
+}
+
+function parseGroundItems(raw: any): GroundItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item: any) => ({
+    name: item.name ?? item.item ?? 'unknown',
+    count: item.count ?? item.quantity ?? 1,
+    distance: item.distance ?? 0,
+  }));
 }
 
 function emptyObservation(): GameObservation {
@@ -59,6 +126,8 @@ function emptyObservation(): GameObservation {
     nearbyPlayers: [],
     nearbyEntities: [],
     notableBlocks: [],
+    inventory: [],
+    groundItems: [],
     recentEvents: [],
   };
 }
@@ -94,6 +163,24 @@ export function formatObservation(obs: GameObservation): string {
     lines.push('\n== NOTABLE BLOCKS ==');
     for (const b of obs.notableBlocks) {
       lines.push(`${b.name} at (${b.x}, ${b.y}, ${b.z}) - ${b.distance} blocks`);
+    }
+  }
+
+  // Inventory
+  lines.push('\n== INVENTORY ==');
+  if (obs.inventory.length > 0) {
+    for (const item of obs.inventory) {
+      lines.push(`${item.name} x${item.count}`);
+    }
+  } else {
+    lines.push('(empty)');
+  }
+
+  // Ground items
+  if (obs.groundItems.length > 0) {
+    lines.push('\n== ITEMS ON GROUND ==');
+    for (const item of obs.groundItems) {
+      lines.push(`${item.name} x${item.count} (${item.distance} blocks)`);
     }
   }
 
