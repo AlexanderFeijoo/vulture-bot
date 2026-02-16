@@ -79,15 +79,49 @@ export async function setupAIPlayer(
   });
 
   // Handle respawn after death (wire before first connect so it's ready)
+  let brainEnabled = true;
   bot.on('died', () => {
     logger.info('NPC died, will respawn in 10s');
+    if (!brainEnabled) return; // Don't respawn if brain was toggled off
     setTimeout(async () => {
+      if (!brainEnabled) return;
       try {
         await bot.connect();
       } catch {
         logger.warn('Failed to respawn NPC after death');
       }
     }, 10000);
+  });
+
+  // Brain toggle: /nuncle brain off → despawn NPC + stop brain
+  bot.on('brainOff', async () => {
+    if (!brainEnabled) {
+      logger.info('Brain toggle: already off');
+      return;
+    }
+    brainEnabled = false;
+    logger.info('Brain toggle: turning OFF');
+    brain.stop();
+    await bot.disconnect();
+    logger.info('Brain toggle: NuncleNelson is now offline');
+  });
+
+  // Brain toggle: /nuncle brain on → spawn NPC + start brain
+  bot.on('brainOn', async () => {
+    if (brainEnabled) {
+      logger.info('Brain toggle: already on');
+      return;
+    }
+    brainEnabled = true;
+    logger.info('Brain toggle: turning ON');
+    try {
+      await bot.connect();
+    } catch (err) {
+      logger.error('Brain toggle: failed to spawn NPC:', err);
+      return;
+    }
+    brain.start();
+    logger.info('Brain toggle: NuncleNelson is now online');
   });
 
   // Reconcile alive state before starting brain (handles bot restart while NPC is alive)

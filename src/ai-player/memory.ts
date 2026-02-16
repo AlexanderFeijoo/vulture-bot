@@ -12,7 +12,7 @@ const DEFAULT_MEMORY: AIMemory = {
     server_name: "Uncle Al's Fat Stash",
   },
   goals: {
-    current: 'Explore the world and make friends',
+    current: 'Survive: find or build shelter, gather basic tools and food',
     subTasks: [],
     completed: [],
   },

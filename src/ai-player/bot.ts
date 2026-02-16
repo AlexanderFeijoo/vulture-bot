@@ -84,6 +84,12 @@ export class AIPlayerBot extends EventEmitter {
       case 'SAID':
         // Our own chat, ignore
         break;
+      case 'BRAIN_ON':
+        this.emit('brainOn');
+        break;
+      case 'BRAIN_OFF':
+        this.emit('brainOff');
+        break;
       default:
         logger.debug(`Unknown NUNCLE event: ${event} ${data}`);
     }

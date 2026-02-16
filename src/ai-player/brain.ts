@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam, ContentBlockParam, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages.js';
 import { logger } from '../utils/logger.js';
-import type { AIPlayerConfig, ThinkTrigger } from './types.js';
+import type { AIPlayerConfig, ThinkTrigger, GameObservation } from './types.js';
 import type { PersistentMemory } from './memory.js';
 import { ACTION_TOOLS, ActionExecutor } from './actions.js';
 import { observeGameState, formatObservation } from './perception.js';
@@ -61,6 +61,10 @@ export class AIBrain {
     this.getPlayerCount = getPlayerCount;
     this.client = new Anthropic({ apiKey: config.anthropicApiKey });
     this.executor = new ActionExecutor(botWrapper, memory, config.boundary);
+  }
+
+  get isRunning(): boolean {
+    return !this.stopped;
   }
 
   start(): void {
@@ -256,14 +260,24 @@ export class AIBrain {
     // Repetition nudge
     const repetitionNudge = this.getRepetitionNudge();
 
+    // Needs assessment
+    const needs = this.assessNeeds(observation);
+
     const userParts = [
       triggerLine,
       '',
       observationText,
+    ];
+
+    if (needs) {
+      userParts.push('', '== NEEDS ==', needs);
+    }
+
+    userParts.push(
       '',
       '== MEMORY ==',
       memorySummary || '(No memories yet)',
-    ];
+    );
 
     if (relationshipContext) {
       userParts.push('', '== RELATIONSHIP NOTES ==', relationshipContext);
@@ -352,6 +366,9 @@ export class AIBrain {
       if (err.status === 429) {
         logger.warn('AIBrain: Rate limited, backing off');
         this.thinkCooldownMs = Math.min(this.thinkCooldownMs * 2, 60000);
+      } else if (err.status === 400) {
+        logger.error('AIBrain: API 400 error (likely malformed history), clearing conversation:', err.message);
+        this.conversationHistory = [];
       } else {
         throw err;
       }
@@ -364,18 +381,35 @@ export class AIBrain {
     }
   }
 
-  /** Compress oldest messages when history exceeds limit */
+  /** Compress oldest messages when history exceeds limit.
+   *  Finds a safe cut point that doesn't orphan tool_result messages. */
   private compactHistory(): void {
     if (this.conversationHistory.length <= MAX_HISTORY_LENGTH) return;
 
-    const toCompress = this.conversationHistory.slice(0, COMPRESS_COUNT);
-    const remaining = this.conversationHistory.slice(COMPRESS_COUNT);
+    // Find a safe cut point — must be a user message with string content (not tool_result).
+    // Scan backwards from COMPRESS_COUNT to find one.
+    let cutIndex = COMPRESS_COUNT;
+    while (cutIndex > 0) {
+      const msg = this.conversationHistory[cutIndex];
+      if (msg.role === 'user' && typeof msg.content === 'string') {
+        break; // Safe: this starts a clean think cycle
+      }
+      cutIndex--;
+    }
+
+    if (cutIndex <= 0) {
+      // No safe cut found — skip compression this cycle
+      logger.debug('compactHistory: no safe cut point found, skipping');
+      return;
+    }
+
+    const toCompress = this.conversationHistory.slice(0, cutIndex);
+    const remaining = this.conversationHistory.slice(cutIndex);
 
     // Summarize compressed messages
     const summaryParts: string[] = [];
     for (const msg of toCompress) {
       if (typeof msg.content === 'string') {
-        // Extract key info from text messages
         const lines = msg.content.split('\n');
         for (const line of lines) {
           if (line.startsWith('[You]') || line.includes('joined') || line.includes('left') || line.includes(': "')) {
@@ -395,13 +429,10 @@ export class AIBrain {
 
     const summary = summaryParts.slice(0, 10).join(' | ') || '(earlier actions and observations)';
 
-    // Replace compressed portion with a single summary message
+    // Replace compressed portion with a single summary message pair
     this.conversationHistory = [
       { role: 'user', content: `[Earlier context summary] ${summary}` },
-      // Ensure alternating roles — if remaining starts with user, add a placeholder assistant
-      ...(remaining[0]?.role === 'user'
-        ? [{ role: 'assistant' as const, content: '(acknowledged earlier context)' }]
-        : []),
+      { role: 'assistant' as const, content: '(acknowledged earlier context)' },
       ...remaining,
     ];
 
@@ -433,10 +464,65 @@ export class AIBrain {
     return lines.length > 0 ? lines.join('\n') : null;
   }
 
+  /** Scan observation data and return urgent needs for the AI */
+  private assessNeeds(observation: GameObservation): string | null {
+    const needs: string[] = [];
+
+    // Check for home in saved places
+    const places = this.memory.memory.places;
+    const hasHome = Object.keys(places).some((name) =>
+      name.toLowerCase().includes('home') || name.toLowerCase().includes('shelter') || name.toLowerCase().includes('base'),
+    );
+    if (!hasHome) {
+      needs.push('You have no home! Build or find shelter.');
+    }
+
+    // Check inventory for tools
+    const inv = observation.inventory;
+    const hasPickaxe = inv.some((i) => i.name.includes('pickaxe'));
+    const hasAxe = inv.some((i) => i.name.includes('_axe'));
+    const hasSword = inv.some((i) => i.name.includes('sword'));
+    if (!hasPickaxe && !hasAxe && !hasSword) {
+      needs.push('You have no tools! Craft basic tools first.');
+    } else {
+      if (!hasPickaxe) needs.push('You have no pickaxe.');
+      if (!hasSword) needs.push('You have no sword for defense.');
+    }
+
+    // Check for food
+    const foodItems = ['bread', 'apple', 'beef', 'pork', 'chicken', 'mutton', 'cod', 'salmon',
+      'potato', 'carrot', 'melon', 'berries', 'stew', 'rabbit', 'cookie'];
+    const hasFood = inv.some((i) => foodItems.some((f) => i.name.includes(f)));
+    if (!hasFood) {
+      needs.push('You have no food!');
+    }
+
+    // Check time of day
+    if (observation.time === 'Sunset') {
+      needs.push('It\'s getting dark! Seek shelter now!');
+    } else if (observation.time === 'Night') {
+      needs.push('It\'s NIGHT — stay in shelter or you\'ll be attacked by monsters!');
+    }
+
+    // Check health
+    if (observation.self.health <= 6) {
+      needs.push('DANGER: Your health is critically low (' + observation.self.health + '/' + observation.self.maxHealth + ')!');
+    }
+
+    // Check for nearby hostiles
+    const hostiles = observation.nearbyEntities.filter((e) => e.hostile);
+    if (hostiles.length > 0) {
+      const names = hostiles.map((h) => h.name).join(', ');
+      needs.push('WARNING: Hostile mobs nearby: ' + names);
+    }
+
+    return needs.length > 0 ? needs.join('\n') : null;
+  }
+
   private buildSystemPrompt(): string {
     const name = this.memory.memory.identity.name || this.config.username;
     const goals = this.memory.memory.goals;
-    const currentGoal = goals?.current || 'Find shelter away from monsters and dig a cave to live in';
+    const currentGoal = goals?.current || 'Survive: find or build shelter, gather basic tools and food';
 
     const lines = [
       this.personality,
@@ -450,11 +536,23 @@ export class AIBrain {
       'Keep chat messages short and natural (like a real player).',
       'If someone talks to you, respond naturally. Be friendly but simple.',
       '',
-      '== SURVIVAL RULES ==',
-      'If you are in danger (low health, hostile mob nearby), prioritize survival.',
-      'If it\'s Sunset or Night, seek shelter. Monsters spawn in darkness.',
+      '== SURVIVAL PRIORITIES (in order) ==',
+      '1. SAFETY: If health is low or hostiles are nearby, flee or fight. At night, seek shelter.',
+      '2. SHELTER: If you don\'t have a home saved, build or find one. Dig into a hillside or build walls.',
+      '3. TOOLS: If your inventory has no tools, craft wooden/stone tools first.',
+      '4. RESOURCES: Gather wood, stone, food. Pick up useful drops.',
+      '5. GOALS: Only pursue your current goal after basic needs are met.',
+      '',
+      '== RULES ==',
       'Don\'t fixate on common ores like copper or coal. Prioritize rare finds (diamond, emerald, gold) or your current goal.',
       'If an action fails, read the error and try a different approach. Do NOT repeat failed actions.',
+      '',
+      '== CRAFTING ==',
+      'You can craft items if you have the right materials. Common recipes:',
+      '  4 planks → crafting_table, 2 planks → 4 sticks',
+      '  2 sticks + 3 planks → wooden_pickaxe, 2 sticks + 3 planks → wooden_axe',
+      '  2 sticks + 1 plank → wooden_sword, 2 sticks + 3 cobblestone → stone_pickaxe',
+      '  1 coal + 1 stick → 4 torches, 8 cobblestone → furnace',
       '',
       `== CURRENT GOAL ==`,
       currentGoal,
@@ -472,7 +570,7 @@ export class AIBrain {
       lines.push('Break your goal into sub-tasks using setGoal with subTasks when you have a plan.');
     }
 
-    lines.push('You can mine blocks, place blocks, pick up items, and use containers to work toward your goal.');
+    lines.push('You can mine blocks, place blocks, pick up items, craft items, and use containers to work toward your goal.');
 
     if (this.config.boundary) {
       const b = this.config.boundary;

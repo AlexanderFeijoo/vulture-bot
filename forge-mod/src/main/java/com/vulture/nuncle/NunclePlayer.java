@@ -15,16 +15,23 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.npc.VillagerType;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.CraftingRecipe;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class NunclePlayer {
     private final MinecraftServer server;
@@ -546,6 +553,100 @@ public class NunclePlayer {
             return "No " + itemName + " in inventory (or container is full)";
         }
         return "Put: " + String.join(", ", put);
+    }
+
+    // --- Crafting ---
+
+    public String craft(String itemName) {
+        if (!isAlive()) return "NuncleNelson is not spawned";
+
+        // Normalize input: "wooden_pickaxe" or "wooden pickaxe" → match against registry
+        String normalized = itemName.trim().toLowerCase().replace(" ", "_");
+
+        // Find the item in the registry
+        Item targetItem = null;
+        for (var entry : ForgeRegistries.ITEMS.getEntries()) {
+            String path = entry.getKey().location().getPath();
+            if (path.equals(normalized)) {
+                targetItem = entry.getValue();
+                break;
+            }
+        }
+        if (targetItem == null) {
+            return "Unknown item: " + itemName;
+        }
+
+        // Find a crafting recipe that outputs this item
+        var recipes = server.getRecipeManager().getAllRecipesFor(RecipeType.CRAFTING);
+        CraftingRecipe matchedRecipe = null;
+        for (var recipeHolder : recipes) {
+            CraftingRecipe recipe = recipeHolder.value();
+            if (recipe.getResultItem(server.registryAccess()).getItem() == targetItem) {
+                matchedRecipe = recipe;
+                break;
+            }
+        }
+        if (matchedRecipe == null) {
+            return "No crafting recipe found for " + itemName;
+        }
+
+        // Count required ingredients (handles shaped + shapeless)
+        Map<Item, Integer> requiredItems = new HashMap<>();
+        for (Ingredient ingredient : matchedRecipe.getIngredients()) {
+            if (ingredient.isEmpty()) continue;
+            ItemStack[] stacks = ingredient.getItems();
+            if (stacks.length == 0) continue;
+            // Use the first matching item for each ingredient slot
+            Item needed = stacks[0].getItem();
+            requiredItems.merge(needed, 1, Integer::sum);
+        }
+
+        if (requiredItems.isEmpty()) {
+            return "Recipe has no ingredients (unexpected)";
+        }
+
+        // Check NPC inventory has all required ingredients
+        Map<Item, Integer> available = new HashMap<>();
+        for (int i = 0; i < npc.getInventory().getContainerSize(); i++) {
+            ItemStack stack = npc.getInventory().getItem(i);
+            if (!stack.isEmpty()) {
+                available.merge(stack.getItem(), stack.getCount(), Integer::sum);
+            }
+        }
+
+        for (Map.Entry<Item, Integer> req : requiredItems.entrySet()) {
+            int have = available.getOrDefault(req.getKey(), 0);
+            if (have < req.getValue()) {
+                String reqName = ForgeRegistries.ITEMS.getKey(req.getKey()).getPath();
+                return "Missing materials: need " + req.getValue() + "x " + reqName + " (have " + have + ")";
+            }
+        }
+
+        // Remove ingredients from inventory
+        for (Map.Entry<Item, Integer> req : requiredItems.entrySet()) {
+            int toRemove = req.getValue();
+            for (int i = 0; i < npc.getInventory().getContainerSize() && toRemove > 0; i++) {
+                ItemStack stack = npc.getInventory().getItem(i);
+                if (stack.isEmpty() || stack.getItem() != req.getKey()) continue;
+                int take = Math.min(toRemove, stack.getCount());
+                stack.shrink(take);
+                if (stack.isEmpty()) npc.getInventory().setItem(i, ItemStack.EMPTY);
+                toRemove -= take;
+            }
+        }
+
+        // Add crafted result to inventory
+        ItemStack result = matchedRecipe.getResultItem(server.registryAccess()).copy();
+        ItemStack leftover = npc.getInventory().addItem(result);
+        if (!leftover.isEmpty()) {
+            // Inventory full — drop overflow
+            ItemEntity dropped = new ItemEntity(
+                npc.level(), npc.getX(), npc.getY(), npc.getZ(), leftover);
+            npc.level().addFreshEntity(dropped);
+        }
+
+        String resultName = ForgeRegistries.ITEMS.getKey(result.getItem()).getPath();
+        return "Crafted " + result.getCount() + "x " + resultName;
     }
 
     // --- Thinking indicator ---

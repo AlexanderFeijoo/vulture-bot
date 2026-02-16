@@ -172,6 +172,19 @@ export const ACTION_TOOLS = [
     },
   },
 
+  // Crafting
+  {
+    name: 'craft',
+    description: 'Craft an item using materials in your inventory. Requires knowing the recipe.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        item: { type: 'string', description: 'Item to craft (e.g. "crafting_table", "wooden_pickaxe", "torch")' },
+      },
+      required: ['item'],
+    },
+  },
+
   // Memory / Meta
   {
     name: 'setGoal',
@@ -339,6 +352,9 @@ export class ActionExecutor {
             `put ${Math.round(args.x)} ${Math.round(args.y)} ${Math.round(args.z)} ${args.itemName} ${putCount}`,
           );
         }
+
+        case 'craft':
+          return await this.bot.sendCommand(`craft ${args.item}`);
 
         // Memory actions (local, no RCON)
         case 'setGoal':

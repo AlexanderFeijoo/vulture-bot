@@ -144,6 +144,18 @@ public class NuncleCommands {
                     .executes(NuncleCommands::thinkingStart))
                 .then(Commands.literal("stop")
                     .executes(NuncleCommands::thinkingStop)))
+
+            // /nuncle craft <itemName>
+            .then(Commands.literal("craft")
+                .then(Commands.argument("itemName", StringArgumentType.greedyString())
+                    .executes(NuncleCommands::craft)))
+
+            // /nuncle brain on|off
+            .then(Commands.literal("brain")
+                .then(Commands.literal("on")
+                    .executes(NuncleCommands::brainOn))
+                .then(Commands.literal("off")
+                    .executes(NuncleCommands::brainOff)))
         );
 
         // /nunclewhere — separate command, no permission required
@@ -315,6 +327,21 @@ public class NuncleCommands {
 
     private static int thinkingStop(CommandContext<CommandSourceStack> ctx) {
         return reply(ctx, mgr().setThinking(false));
+    }
+
+    private static int craft(CommandContext<CommandSourceStack> ctx) {
+        String itemName = StringArgumentType.getString(ctx, "itemName");
+        return reply(ctx, mgr().craft(itemName));
+    }
+
+    private static int brainOn(CommandContext<CommandSourceStack> ctx) {
+        NuncleMod.LOGGER.info("[NUNCLE] BRAIN_ON");
+        return reply(ctx, "Brain toggle: ON — NuncleNelson will spawn and start thinking");
+    }
+
+    private static int brainOff(CommandContext<CommandSourceStack> ctx) {
+        NuncleMod.LOGGER.info("[NUNCLE] BRAIN_OFF");
+        return reply(ctx, "Brain toggle: OFF — NuncleNelson will despawn and stop thinking");
     }
 
     // /nunclewhere — any player, no permission required

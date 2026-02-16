@@ -36,8 +36,8 @@ public class NuncleObserver {
         "iron_ore", "deepslate_iron_ore",
         "gold_ore", "deepslate_gold_ore",
         "emerald_ore", "deepslate_emerald_ore",
-        "coal_ore", "deepslate_coal_ore",
-        "copper_ore", "deepslate_copper_ore",
+        "lapis_ore", "deepslate_lapis_ore",
+        "redstone_ore", "deepslate_redstone_ore",
         "crafting_table", "furnace", "blast_furnace", "smoker",
         "anvil", "enchanting_table", "brewing_stand",
         "chest", "barrel", "ender_chest"
