@@ -94,8 +94,14 @@ export class AIPlayerBot extends EventEmitter {
     try {
       const response = await this.rcon.sendCommand('nuncle status');
       const wasSpawned = this.spawned;
-      // The mod returns "alive" or "dead" (or similar) in its status
-      this.spawned = response.toLowerCase().includes('alive');
+      // Mod returns JSON: {"alive":true,...} or {"alive":false}
+      try {
+        const status = JSON.parse(response);
+        this.spawned = status.alive === true;
+      } catch {
+        // Fallback: if not JSON, check for "alive":true specifically
+        this.spawned = response.includes('"alive":true');
+      }
       if (this.spawned !== wasSpawned) {
         logger.info(`Reconciled NPC state: was ${wasSpawned ? 'alive' : 'dead'}, now ${this.spawned ? 'alive' : 'dead'}`);
         if (this.spawned) {
