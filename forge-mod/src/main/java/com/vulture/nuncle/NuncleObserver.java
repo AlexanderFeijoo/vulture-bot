@@ -31,16 +31,20 @@ public class NuncleObserver {
         "evoker", "vex", "guardian", "elder_guardian", "warden"
     );
 
-    private static final Set<String> NOTABLE_BLOCKS = Set.of(
-        "diamond_ore", "deepslate_diamond_ore",
-        "iron_ore", "deepslate_iron_ore",
-        "gold_ore", "deepslate_gold_ore",
-        "emerald_ore", "deepslate_emerald_ore",
-        "lapis_ore", "deepslate_lapis_ore",
-        "redstone_ore", "deepslate_redstone_ore",
-        "crafting_table", "furnace", "blast_furnace", "smoker",
-        "anvil", "enchanting_table", "brewing_stand",
-        "chest", "barrel", "ender_chest"
+    /** Boring terrain/filler blocks to ignore — everything else gets reported */
+    private static final Set<String> IGNORE_BLOCKS = Set.of(
+        "air", "cave_air", "void_air",
+        "stone", "deepslate", "dirt", "grass_block", "coarse_dirt", "rooted_dirt",
+        "podzol", "mycelium", "mud", "clay",
+        "bedrock", "gravel", "sand", "red_sand", "sandstone", "red_sandstone",
+        "water", "lava",
+        "netherrack", "basalt", "smooth_basalt", "blackstone", "end_stone",
+        "tuff", "calcite", "dripstone_block",
+        "granite", "diorite", "andesite",
+        "cobblestone", "mossy_cobblestone",
+        "infested_stone", "infested_deepslate",
+        "snow", "snow_block", "ice", "packed_ice", "blue_ice",
+        "terracotta" // plain terracotta only; colored variants pass through
     );
 
     public static String getStatus(NunclePlayer mgr) {
@@ -175,29 +179,38 @@ public class NuncleObserver {
         }
         json.add("groundItems", groundItems);
 
-        // Notable blocks
-        JsonArray blocks = new JsonArray();
-        int blockCount = 0;
-        for (int dx = -BLOCK_SCAN_RADIUS; dx <= BLOCK_SCAN_RADIUS && blockCount < 15; dx++) {
-            for (int dy = -BLOCK_SCAN_RADIUS; dy <= BLOCK_SCAN_RADIUS && blockCount < 15; dy++) {
-                for (int dz = -BLOCK_SCAN_RADIUS; dz <= BLOCK_SCAN_RADIUS && blockCount < 15; dz++) {
+        // Nearby blocks — report everything except boring filler, deduplicated by type (closest of each)
+        Map<String, int[]> closestByType = new LinkedHashMap<>(); // name -> {x, y, z, distSq}
+        for (int dx = -BLOCK_SCAN_RADIUS; dx <= BLOCK_SCAN_RADIUS; dx++) {
+            for (int dy = -BLOCK_SCAN_RADIUS; dy <= BLOCK_SCAN_RADIUS; dy++) {
+                for (int dz = -BLOCK_SCAN_RADIUS; dz <= BLOCK_SCAN_RADIUS; dz++) {
                     BlockPos bp = bpos.offset(dx, dy, dz);
                     BlockState state = level.getBlockState(bp);
                     String blockName = state.getBlock().getDescriptionId()
                         .replace("block.minecraft.", "");
-                    if (NOTABLE_BLOCKS.contains(blockName)) {
-                        JsonObject bj = new JsonObject();
-                        bj.addProperty("name", blockName);
-                        bj.addProperty("x", bp.getX());
-                        bj.addProperty("y", bp.getY());
-                        bj.addProperty("z", bp.getZ());
-                        bj.addProperty("distance", (int) Math.sqrt(dx*dx + dy*dy + dz*dz));
-                        blocks.add(bj);
-                        blockCount++;
+                    if (IGNORE_BLOCKS.contains(blockName)) continue;
+                    int distSq = dx*dx + dy*dy + dz*dz;
+                    int[] existing = closestByType.get(blockName);
+                    if (existing == null || distSq < existing[3]) {
+                        closestByType.put(blockName, new int[]{bp.getX(), bp.getY(), bp.getZ(), distSq});
                     }
                 }
             }
         }
+        // Sort by distance, cap at 20 entries
+        JsonArray blocks = new JsonArray();
+        closestByType.entrySet().stream()
+            .sorted(Comparator.comparingInt(e -> e.getValue()[3]))
+            .limit(20)
+            .forEach(e -> {
+                JsonObject bj = new JsonObject();
+                bj.addProperty("name", e.getKey());
+                bj.addProperty("x", e.getValue()[0]);
+                bj.addProperty("y", e.getValue()[1]);
+                bj.addProperty("z", e.getValue()[2]);
+                bj.addProperty("distance", (int) Math.sqrt(e.getValue()[3]));
+                blocks.add(bj);
+            });
         json.add("notableBlocks", blocks);
 
         // Boundary info

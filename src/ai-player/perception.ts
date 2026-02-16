@@ -2,40 +2,16 @@ import { logger } from '../utils/logger.js';
 import type { AIPlayerBot } from './bot.js';
 import type { GameObservation, InventoryItem, GroundItem } from './types.js';
 
-/** Priority map for notable blocks — higher = more interesting. Unlisted = 0 (filtered out). */
-const BLOCK_PRIORITY: Record<string, number> = {
-  // Extremely rare
-  ancient_debris: 10,
-  spawner: 10,
-  // Very rare ores
-  diamond_ore: 9,
-  deepslate_diamond_ore: 9,
-  emerald_ore: 9,
-  deepslate_emerald_ore: 9,
-  // Rare ores
-  gold_ore: 7,
-  deepslate_gold_ore: 7,
-  lapis_ore: 7,
-  deepslate_lapis_ore: 7,
-  redstone_ore: 6,
-  deepslate_redstone_ore: 6,
-  // Useful ores
-  iron_ore: 5,
-  deepslate_iron_ore: 5,
-  // Common ores — filtered out (priority 0) to prevent fixation
-  // copper_ore, deepslate_copper_ore, coal_ore, deepslate_coal_ore: omitted
-  // Structures / interesting
-  chest: 8,
-  barrel: 6,
-  crafting_table: 4,
-  furnace: 4,
-  blast_furnace: 4,
-  smoker: 4,
-  anvil: 5,
-  enchanting_table: 6,
-  brewing_stand: 5,
-  bed: 3,
-};
+/** Blocks to suppress from observations even if the mod sends them (common clutter). */
+const SUPPRESS_BLOCKS = new Set([
+  'copper_ore', 'deepslate_copper_ore',
+  'coal_ore', 'deepslate_coal_ore',
+  'short_grass', 'tall_grass', 'fern', 'large_fern',
+  'dead_bush', 'seagrass', 'tall_seagrass',
+  'dandelion', 'poppy', 'blue_orchid', 'allium', 'azure_bluet',
+  'red_tulip', 'orange_tulip', 'white_tulip', 'pink_tulip',
+  'oxeye_daisy', 'cornflower', 'lily_of_the_valley',
+]);
 
 /**
  * Observe game state by querying the Forge mod via RCON.
@@ -70,7 +46,7 @@ export async function observeGameState(bot: AIPlayerBot): Promise<GameObservatio
         distance: e.distance,
         hostile: e.hostile ?? false,
       })),
-      notableBlocks: prioritizeBlocks(data.notableBlocks ?? []),
+      notableBlocks: filterBlocks(data.notableBlocks ?? []),
       inventory: parseInventory(data.inventory),
       groundItems: parseGroundItems(data.groundItems),
       recentEvents: [], // Filled by brain from event buffer
@@ -81,7 +57,7 @@ export async function observeGameState(bot: AIPlayerBot): Promise<GameObservatio
   }
 }
 
-function prioritizeBlocks(blocks: any[]): GameObservation['notableBlocks'] {
+function filterBlocks(blocks: any[]): GameObservation['notableBlocks'] {
   return blocks
     .map((b: any) => ({
       name: b.name as string,
@@ -89,12 +65,10 @@ function prioritizeBlocks(blocks: any[]): GameObservation['notableBlocks'] {
       y: b.y as number,
       z: b.z as number,
       distance: b.distance as number,
-      priority: BLOCK_PRIORITY[b.name] ?? 0,
     }))
-    .filter((b) => b.priority > 0)
-    .sort((a, b) => b.priority - a.priority || a.distance - b.distance)
-    .slice(0, 5)
-    .map(({ priority: _, ...rest }) => rest);
+    .filter((b) => !SUPPRESS_BLOCKS.has(b.name))
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 15);
 }
 
 function parseInventory(raw: any): InventoryItem[] {
@@ -157,7 +131,7 @@ export function formatObservation(obs: GameObservation): string {
 
   // Notable blocks
   if (obs.notableBlocks.length > 0) {
-    lines.push('\n== NOTABLE BLOCKS ==');
+    lines.push('\n== NEARBY BLOCKS ==');
     for (const b of obs.notableBlocks) {
       lines.push(`${b.name} at (${b.x}, ${b.y}, ${b.z}) - ${b.distance} blocks`);
     }
