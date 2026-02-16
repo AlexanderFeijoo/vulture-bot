@@ -22,11 +22,8 @@ const BLOCK_PRIORITY: Record<string, number> = {
   // Useful ores
   iron_ore: 5,
   deepslate_iron_ore: 5,
-  // Common ores (low priority — don't fixate on these)
-  copper_ore: 1,
-  deepslate_copper_ore: 1,
-  coal_ore: 1,
-  deepslate_coal_ore: 1,
+  // Common ores — filtered out (priority 0) to prevent fixation
+  // copper_ore, deepslate_copper_ore, coal_ore, deepslate_coal_ore: omitted
   // Structures / interesting
   chest: 8,
   barrel: 6,
