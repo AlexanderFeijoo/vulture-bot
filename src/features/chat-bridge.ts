@@ -35,7 +35,11 @@ export function setupChatBridge(tracker: PlayerTracker, messaging: MessagingMana
 
   // MC → Discord: relay in-game chat to Discord via webhook
   tracker.on('event', async (event: MinecraftEvent) => {
-    if (event.type !== 'chat') return;
+    if (event.type !== 'chat') {
+      logger.debug(`chat-bridge MC event ignored (type=${event.type})`);
+      return;
+    }
+    logger.debug(`chat-bridge MC→Discord: player=${event.player} message="${event.message}" enabled=${bridgeEnabled}`);
     if (!bridgeEnabled) return;
 
     try {
@@ -52,6 +56,7 @@ export function setupChatBridge(tracker: PlayerTracker, messaging: MessagingMana
 
   // Discord → MC: relay Discord messages to in-game chat via RCON tellraw
   messaging.onMessage(async (message) => {
+    logger.debug(`chat-bridge Discord→MC: channel=${message.channel} author=${message.author} content="${message.content}" enabled=${bridgeEnabled}`);
     if (message.channel !== 'chat') return;
     if (!bridgeEnabled) return;
 

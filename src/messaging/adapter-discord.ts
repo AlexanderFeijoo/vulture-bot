@@ -98,10 +98,20 @@ export class DiscordAdapter implements MessagingAdapter {
 
     // Listen for messages in chat channel (Discord → MC)
     this.client.on('messageCreate', (message) => {
-      if (message.author.bot) return;
-      if (!this.config.chatChannelId || message.channelId !== this.config.chatChannelId) return;
-      if (!this.messageHandler) return;
-
+      logger.debug(`Discord messageCreate: channel=${message.channelId} author=${message.author.tag} bot=${message.author.bot} content="${message.cleanContent}"`);
+      if (message.author.bot) {
+        logger.debug('  → skipping (bot author)');
+        return;
+      }
+      if (!this.config.chatChannelId || message.channelId !== this.config.chatChannelId) {
+        logger.debug(`  → skipping (channel mismatch: configured=${this.config.chatChannelId ?? 'none'})`);
+        return;
+      }
+      if (!this.messageHandler) {
+        logger.debug('  → skipping (no messageHandler registered)');
+        return;
+      }
+      logger.debug(`  → routing to messageHandler as chat`);
       this.messageHandler({
         platform: 'discord',
         author: message.author.displayName,
@@ -172,16 +182,23 @@ export class DiscordAdapter implements MessagingAdapter {
   }
 
   async sendAsUser(message: WebhookStyleMessage): Promise<void> {
+    logger.debug(`sendAsUser: channel=${message.channel} username=${message.username} content="${message.content}"`);
     if (!this.chatWebhook) {
       logger.warn('No chat webhook available — cannot send as user');
       return;
     }
     const content = await this.resolveMentions(message.content);
-    await this.chatWebhook.send({
-      content,
-      username: message.username,
-      avatarURL: message.avatarUrl,
-    });
+    try {
+      await this.chatWebhook.send({
+        content,
+        username: message.username,
+        avatarURL: message.avatarUrl,
+      });
+      logger.debug(`  → webhook send completed for ${message.username}`);
+    } catch (err) {
+      logger.error(`  → webhook send FAILED for ${message.username}:`, err);
+      throw err;
+    }
   }
 
   private async resolveMentions(content: string): Promise<string> {
