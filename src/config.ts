@@ -52,6 +52,9 @@ export const config = {
         eventsChannelId: env('DISCORD_EVENTS_CHANNEL_ID'),
         chatChannelId: envOptional('DISCORD_CHAT_CHANNEL_ID'),
         logsChannelId: envOptional('DISCORD_LOGS_CHANNEL_ID'),
+        // Optional: gate slash commands like /livechat to a specific Discord role.
+        // If unset, only the guild owner can use gated commands.
+        moderatorRoleId: envOptional('DISCORD_MODERATOR_ROLE_ID'),
       }
     : null,
 

@@ -2,10 +2,9 @@ import type { PlayerTracker } from '../minecraft/player-tracker.js';
 import type { MessagingManager } from '../messaging/manager.js';
 import type { MinecraftRcon } from '../minecraft/rcon-client.js';
 import type { MinecraftEvent } from '../minecraft/events.js';
+import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 
-const CHAT_CHANNEL_ID = '1471054475753029693';
-const MODERATOR_ROLE_ID = '1471056672100323496';
 const COLOR_BLUE = 0x2196f3;
 
 // Minecraft tellraw colors that are readable in chat
@@ -83,16 +82,24 @@ export function setupChatBridge(tracker: PlayerTracker, messaging: MessagingMana
   messaging.onSlashCommand((interaction) => {
     if (interaction.commandName !== 'livechat') return;
 
-    // Must be used in the chat channel
-    if (interaction.channelId !== CHAT_CHANNEL_ID) {
-      interaction.ephemeralReply('This command only works in <#' + CHAT_CHANNEL_ID + '>.');
+    const chatChannelId = config.discord?.chatChannelId;
+    const moderatorRoleId = config.discord?.moderatorRoleId;
+
+    // If a chat channel is configured, gate the command to it. If unconfigured, allow from anywhere.
+    if (chatChannelId && interaction.channelId !== chatChannelId) {
+      interaction.ephemeralReply('This command only works in <#' + chatChannelId + '>.');
       return;
     }
 
-    // Must be owner or have Moderator role
-    const hasPermission = interaction.isGuildOwner || interaction.memberRoleIds.includes(MODERATOR_ROLE_ID);
+    // If a moderator role is configured, require it (or guild owner). If unconfigured, only guild owner can use it.
+    const hasPermission = interaction.isGuildOwner ||
+      (!!moderatorRoleId && interaction.memberRoleIds.includes(moderatorRoleId));
     if (!hasPermission) {
-      interaction.ephemeralReply('You need the Moderator role to use this command.');
+      interaction.ephemeralReply(
+        moderatorRoleId
+          ? 'You need the Moderator role to use this command.'
+          : 'Only the guild owner can use this command.',
+      );
       return;
     }
 
