@@ -10,8 +10,10 @@ const DEDICATED_SERVER = /\[net\.minecraft\.server\.dedicated\.DedicatedServer\/
 const JOIN_PATTERN = /^(\w+) joined the game$/;
 const LEAVE_PATTERN = /^(\w+) left the game$/;
 
-// Chat: <PlayerName> message
-const CHAT_PATTERN = /^<(\w+)> (.+)$/;
+// Chat: <PlayerName> message  (vanilla)
+//   or  <PlayerName <Dimension>> message  (Forge 1.20.1 with dimension-in-chat formatter)
+// Captures only the player name in group 1.
+const CHAT_PATTERN = /^<(\w+)(?: <[^>]*>)?> (.+)$/;
 
 // Advancement: PlayerName has made the advancement [Advancement Name]
 const ADVANCEMENT_PATTERN = /^(\w+) has made the advancement \[(.+)\]$/;
